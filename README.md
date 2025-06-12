@@ -35,17 +35,26 @@ MindThread is a full-stack web application that blends a modern blogging experie
 
 
 ## Project Structure
-
+MindThread
 root/
-├── client/ # React frontend
-│ ├── src/
-│ ├── public/
-│ └── package.json
-├── server/ # Flask backend
-│ ├── app/
-│ ├── run.py
-│ └── requirements.txt
-└── README.md
+├── client/                  
+│   ├── src/
+│   ├── public/
+│   └── package.json
+├── server/                  
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   ├── routes/
+│   │   ├── schemas/         
+│   │   ├── utils/
+│   │   └── auth.py
+│   ├── migrations/          
+│   ├── config.py
+│   ├── run.py
+│   └── requirements.txt
+├── README.md
+└── LICENSE
 
 
 ## How to Run the Application
@@ -103,7 +112,7 @@ POST	/api/votes/comment/:id	  Vote on a comment
 Copyright (c) 2025 [YMercy Mumbe Munyongwe,https://github.com/Mumbe-stack/MindThread]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the “Software”), to deal
+of this software and associated documentation files, to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
