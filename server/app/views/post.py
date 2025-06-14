@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.models import Post, db
+from ..models import Post, db
 from datetime import datetime
 
 post_bp = Blueprint('post_bp', __name__)
@@ -46,7 +46,7 @@ def delete_post(id):
     return jsonify({"sucess": "Post deleted"})
 
 @post_bp.route("/", methods=["POST"])
-def create_post():
+def create_new_post():
     data = request.json
 
     if not all(k in data for k in ("title", "content", "user_id")):
