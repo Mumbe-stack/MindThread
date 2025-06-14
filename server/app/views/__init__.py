@@ -1,10 +1,10 @@
-def register blueprints(app):
-    from . import main
-    from . import auth
-    from . import api
+from .user import user_bp
+from .post import post_bp
+from .comment import comment_bp
+from .main import main_bp
 
-    app.register_blueprint(main.bp)
-    app.register_blueprint(auth.bp)
-    app.register_blueprint(api.bp)
-
-   
+def register_blueprints(app):
+    app.register_blueprint(user_bp, url_prefix='/users')
+    app.register_blueprint(post_bp, url_prefix='/posts')
+    app.register_blueprint(comment_bp, url_prefix='/comments')
+    app.register_blueprint(main_bp) 
