@@ -3,21 +3,26 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+
 class User(db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), nullable=False, unique=True)
-    email = db.Column(db.String(120), nullable=False, unique=True)
-    password = db.Column(db.String(200), nullable=False)
+    username = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    posts = db.relationship('Post', backref='user', lazy=True)
-    comments = db.relationship('Comment', backref='user', lazy=True)
-    votes = db.relationship('Vote', backref='user', lazy=True)
+    posts = db.relationship("Post", backref="user", lazy=True)
+    comments = db.relationship("Comment", backref="user", lazy=True)
 
-    def __repr__(self):
-        return f"<User {self.username}>"
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "created_at": self.created_at.isoformat()
+        }
 
 
 class Post(db.Model):
@@ -58,11 +63,12 @@ class Vote(db.Model):
     __tablename__ = 'votes'
 
     id = db.Column(db.Integer, primary_key=True)
-    value = db.Column(db.Integer, nullable=False)  
+    value = db.Column(db.Integer, nullable=False)
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True)
-    comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey(
+        'comments.id'), nullable=True)
 
     def __repr__(self):
         return f"<Vote user_id={self.user_id} post_id={self.post_id} comment_id={self.comment_id}>"

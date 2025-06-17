@@ -2,8 +2,10 @@ from flask import Blueprint, request, jsonify
 from models import Post, db
 from datetime import datetime
 
-post_bp = Blueprint('post_bp', __name__)
+post_bp = Blueprint('post_bp', __name__, url_prefix='/api/posts')
 
+
+# GET /api/posts/ - List all posts
 @post_bp.route("/", methods=["GET"])
 def list_posts():
     posts = Post.query.all()
@@ -14,10 +16,26 @@ def list_posts():
             "content": p.content,
             "tags": p.tags,
             "user_id": p.user_id,
-            "created_at": p.created_at
+            "created_at": p.created_at.isoformat()
         } for p in posts
     ]), 200
 
+
+# GET /api/posts/<id> - Get single post by ID
+@post_bp.route("/<int:id>", methods=["GET"])
+def get_post(id):
+    post = Post.query.get_or_404(id)
+    return jsonify({
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "tags": post.tags,
+        "user_id": post.user_id,
+        "created_at": post.created_at.isoformat()
+    }), 200
+
+
+# POST /api/posts/ - Create new post
 @post_bp.route("/", methods=["POST"])
 def create_post():
     data = request.json
@@ -41,9 +59,12 @@ def create_post():
 
     return jsonify({
         "success": "Post created",
-        "id": new_post.id
+        "id": new_post.id,
+        "title": new_post.title
     }), 201
 
+
+# PUT /api/posts/<id> - Update a post
 @post_bp.route("/<int:id>", methods=["PUT"])
 def update_post(id):
     post = Post.query.get_or_404(id)
@@ -71,6 +92,8 @@ def update_post(id):
         }
     }), 200
 
+
+# DELETE /api/posts/<id> - Delete a post
 @post_bp.route("/<int:id>", methods=["DELETE"])
 def delete_post(id):
     post = Post.query.get_or_404(id)
@@ -79,3 +102,4 @@ def delete_post(id):
     return jsonify({
         "success": f"Post ID {id} deleted"
     }), 200
+
