@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from ..routes.models import Vote, db
+from models import Vote, db
 
 vote_bp = Blueprint('vote_bp', __name__)
 

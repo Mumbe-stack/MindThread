@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from ..routes.models import Post, db
+from models import Post, db
 from datetime import datetime
 
 post_bp = Blueprint('post_bp', __name__)
