@@ -5,8 +5,10 @@ from flask_mail import Mail
 from models import db, User, Post, Comment, Vote
 from views import register_blueprints
 from config import Config
+from flask_jwt_extended import JWTManager
 
 mail = Mail()
+jwt = JWTManager()
 
 def create_app():
     app = Flask(__name__)
@@ -15,6 +17,7 @@ def create_app():
     mail.init_app(app)
     db.init_app(app)
     migrate = Migrate(app, db)
+    jwt.init_app(app) 
 
     with app.app_context():
         try:
