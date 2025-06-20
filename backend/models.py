@@ -55,7 +55,11 @@ class Comment(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
-
+    
+    parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+    is_flagged = db.Column(db.Boolean, default=False, nullable=False)
+    is_approved = db.Column(db.Boolean, default=True) 
+    
     votes = db.relationship('Vote', backref='comment', lazy=True)
 
     def __repr__(self):
