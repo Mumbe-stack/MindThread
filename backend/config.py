@@ -5,8 +5,11 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 class Config:
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(basedir, 'instance', 'app.db')}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
     JWT_SECRET_KEY = "jwt_secret_key"
     JWT_TOKEN_LOCATION = ["headers"] 
+    JWT_BLACKLIST_ENABLED = True
+    JWT_BLACKLIST_TOKEN_CHECKS = ["access"]
 
     MAIL_SERVER = "smtp.gmail.com"
     MAIL_PORT = 587

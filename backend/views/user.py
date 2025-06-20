@@ -2,9 +2,10 @@ from flask import Blueprint, request, jsonify, current_app
 from models import User, db
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import (
-    create_access_token, jwt_required, get_jwt_identity
+    create_access_token, jwt_required, get_jwt_identity, create_access_token, get_jwt
 )
 from flask_mail import Message
+from models import TokenBlocklist
 
 user_bp = Blueprint('user_bp', __name__, url_prefix="/api/users")
 
@@ -165,3 +166,10 @@ def block_user(user_id):
     status = "blocked" if user.is_blocked else "unblocked"
     return jsonify({"message": f"User '{user.username}' has been {status}."}), 200
 
+@user_bp.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    jti = get_jwt()["jti"]  
+    db.session.add(TokenBlocklist(jti=jti))
+    db.session.commit()
+    return jsonify({"message": "Successfully logged out"}), 200
