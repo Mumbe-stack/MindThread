@@ -10,6 +10,12 @@ comment_likes = db.Table(
     db.Column('comment_id', db.Integer, db.ForeignKey('comments.id'), primary_key=True)
 )
 
+post_likes = db.Table('post_likes',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True)
+)
+
+
 class User(db.Model):
     __tablename__ = 'users'
 
@@ -29,6 +35,13 @@ class User(db.Model):
         'Comment',
         secondary='comment_likes',
         backref=db.backref('liked_by_users', lazy='dynamic'),
+        lazy='dynamic'
+    )
+    
+    liked_posts = db.relationship(
+        'Post',
+        secondary=post_likes,
+        backref='liked_by_users',
         lazy='dynamic'
   )
 
@@ -54,8 +67,8 @@ class Post(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
-    comments = db.relationship('Comment', backref='post', lazy=True)
-    votes = db.relationship('Vote', backref='post', lazy=True)
+    comments = db.relationship('Comment', backref='post', lazy=True, cascade="all, delete-orphan")
+    votes = db.relationship('Vote', backref='post', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Post {self.title}>"
