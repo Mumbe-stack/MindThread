@@ -4,6 +4,11 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+comment_likes = db.Table(
+    'comment_likes',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('comment_id', db.Integer, db.ForeignKey('comments.id'), primary_key=True)
+)
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -20,6 +25,13 @@ class User(db.Model):
     posts = db.relationship("Post", backref="user", lazy=True)
     comments = db.relationship("Comment", backref="user", lazy=True)
 
+    liked_comments = db.relationship(
+        'Comment',
+        secondary='comment_likes',
+        backref=db.backref('liked_by_users', lazy='dynamic'),
+        lazy='dynamic'
+  )
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -27,7 +39,6 @@ class User(db.Model):
             "email": self.email,
             "created_at": self.created_at.isoformat()
         }
-
 
 class Post(db.Model):
     __tablename__ = 'posts'
@@ -65,6 +76,7 @@ class Comment(db.Model):
     is_approved = db.Column(db.Boolean, default=True) 
     
     votes = db.relationship('Vote', backref='comment', lazy=True)
+    likes = db.Column(db.Integer, default=0, nullable=False)
 
     def __repr__(self):
         return f"<Comment {self.content[:20]}>"

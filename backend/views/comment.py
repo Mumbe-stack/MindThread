@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Comment, User
+from models import db, Comment, User, Post
 from datetime import datetime
 
 comment_bp = Blueprint('comment_bp', __name__, url_prefix="/api/comments")
@@ -35,62 +35,138 @@ def list_comments():
 @jwt_required()
 def create_comment():
     data = request.get_json()
-    current_user_id = get_jwt_identity()
+    user_id = get_jwt_identity()
 
-    if not all(k in data for k in ("content", "post_id")):
-        return jsonify({"error": "Missing fields: content, post_id"}), 400
+    if not data.get("content") or not data.get("post_id"):
+        return jsonify({"error": "Missing fields: content and post_id are required"}), 400
 
-    new_comment = Comment(
+    post = Post.query.get(data["post_id"])
+    if not post:
+        return jsonify({"error": f"Post with ID {data['post_id']} does not exist"}), 404
+
+    parent_id = data.get("parent_id")
+    if parent_id:
+        parent_comment = Comment.query.get(parent_id)
+        if not parent_comment:
+            return jsonify({"error": f"Parent comment with ID {parent_id} does not exist"}), 404
+
+    comment = Comment(
         content=data["content"],
         post_id=data["post_id"],
-        user_id=current_user_id,
-        parent_id=data.get("parent_id"),  
+        user_id=user_id,
+        parent_id=parent_id,
         created_at=datetime.utcnow()
     )
-    db.session.add(new_comment)
+
+    db.session.add(comment)
     db.session.commit()
 
     return jsonify({
         "success": "Comment created",
-        "comment_id": new_comment.id
+        "comment_id": comment.id,
+        "is_reply_to": parent_id
     }), 201
+
+
+@comment_bp.route("/<int:id>/like", methods=["PATCH"])
+@jwt_required()
+def like_comment(id):
+    user_id = get_jwt_identity()
+    comment = Comment.query.get_or_404(id)
+    user = User.query.get(user_id)
+
+    if comment in user.liked_comments:
+        return jsonify({"error": "You have already liked this comment"}), 400
+
+    user.liked_comments.append(comment)
+    db.session.commit()
+
+    return jsonify({
+        "message": f"Comment ID {id} liked",
+        "likes": comment.likes_count,
+        "liked_by": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }), 200
+
+
+@comment_bp.route("/<int:id>/unlike", methods=["PATCH"])
+@jwt_required()
+def unlike_comment(id):
+    user_id = get_jwt_identity()
+    comment = Comment.query.get_or_404(id)
+    user = User.query.get(user_id)
+
+    if comment not in user.liked_comments:
+        return jsonify({"error": "You haven't liked this comment yet"}), 400
+
+    user.liked_comments.remove(comment)
+    db.session.commit()
+
+    return jsonify({
+        "message": f"Comment ID {id} unliked",
+        "likes": comment.likes,
+        "unliked_by": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }), 200
 
 
 @comment_bp.route("/<int:id>", methods=["PUT"])
 @jwt_required()
 def update_comment(id):
-    current_user_id = get_jwt_identity()
+    user_id = get_jwt_identity()
     comment = Comment.query.get_or_404(id)
 
-    if comment.user_id != current_user_id:
-        return jsonify({"error": "You are not authorized to edit this comment"}), 403
+    if comment.user_id != user_id:
+        return jsonify({"error": "You can only edit your own comment"}), 403
 
     data = request.get_json()
     if not data.get("content"):
         return jsonify({"error": "Content is required"}), 400
 
-    old_content = comment.content
     comment.content = data["content"]
     db.session.commit()
 
     return jsonify({
         "success": "Comment updated",
-        "old_content": old_content,
         "new_content": comment.content
     }), 200
+    
+@comment_bp.route("/<int:parent_id>/replies", methods=["GET"])
+def get_replies(parent_id):
+    parent = Comment.query.get(parent_id)
+    if not parent:
+        return jsonify({"error": f"Comment with ID {parent_id} does not exist"}), 404
+
+    replies = Comment.query.filter_by(parent_id=parent_id).order_by(Comment.created_at.asc()).all()
+    if not replies:
+        return jsonify({"error": f"No replies found for comment ID {parent_id}"}), 404
+
+    return jsonify([
+        {
+            "id": reply.id,
+            "content": reply.content,
+            "post_id": reply.post_id,
+            "user_id": reply.user_id,
+            "parent_id": reply.parent_id,
+            "created_at": reply.created_at.isoformat()
+        } for reply in replies
+    ]), 200
 
 
 @comment_bp.route("/<int:id>", methods=["DELETE"])
 @jwt_required()
 def delete_comment(id):
-    current_user_id = get_jwt_identity()
-    comment = Comment.query.get(id)
+    user_id = get_jwt_identity()
+    comment = Comment.query.get_or_404(id)
 
-    if not comment:
-        return jsonify({"error": f"Comment ID {id} does not exist"}), 404
-
-    if comment.user_id != current_user_id:
-        return jsonify({"error": "You are not authorized to delete this comment"}), 403
+    if comment.user_id != user_id:
+        return jsonify({"error": "You can only delete your own comment"}), 403
 
     db.session.delete(comment)
     db.session.commit()
