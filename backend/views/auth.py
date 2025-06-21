@@ -4,15 +4,15 @@ from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity, get_jwt
 )
 from datetime import datetime, timezone
-
 from models import db, User, TokenBlocklist
 
-auth_bp = Blueprint("auth_bp", __name__)
+auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
 
-
+# ✅ Register
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
+
     if not data or not all(k in data for k in ("username", "email", "password")):
         return jsonify({"error": "Missing fields"}), 400
 
@@ -23,15 +23,15 @@ def register():
     new_user = User(
         username=data["username"],
         email=data["email"],
-        password=hashed_pw
+        password_hash=hashed_pw  # ✅ Corrected field name
     )
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({"success": "User registered successfully"}), 201
+    return jsonify({"success": True, "message": "User registered successfully"}), 201
 
 
-
+# ✅ Login
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -42,14 +42,21 @@ def login():
         return jsonify({"error": "Email and password required"}), 400
 
     user = User.query.filter_by(email=email).first()
-    if not user or not check_password_hash(user.password, password):
+    if not user or not check_password_hash(user.password_hash, password):  # ✅ Corrected field
         return jsonify({"error": "Invalid credentials"}), 401
 
     access_token = create_access_token(identity=user.id)
-    return jsonify(access_token=access_token), 200
+
+    return jsonify({
+        "success": True,
+        "access_token": access_token,
+        "user_id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin
+    }), 200
 
 
-
+# ✅ Get current user info
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
@@ -57,14 +64,15 @@ def get_current_user():
     user = User.query.get_or_404(user_id)
 
     return jsonify({
+        "success": True,
         "id": user.id,
         "username": user.username,
         "email": user.email,
-        "created_at": user.created_at
+        "created_at": user.created_at.isoformat()
     }), 200
 
 
-
+# ✅ Logout with token blocklisting
 @auth_bp.route("/logout", methods=["DELETE"])
 @jwt_required()
 def logout():
@@ -74,4 +82,4 @@ def logout():
     db.session.add(TokenBlocklist(jti=jti, created_at=now))
     db.session.commit()
 
-    return jsonify({"message": "Logged out successfully"}), 200
+    return jsonify({"success": True, "message": "Logged out successfully"}), 200
