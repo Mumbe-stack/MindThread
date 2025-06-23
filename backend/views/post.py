@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from io import BytesIO
 from datetime import datetime
 from models import db, Post, User
-from utils import block_check_required  
+from .utils import block_check_required  
 
 post_bp = Blueprint('post_bp', __name__, url_prefix="/api/posts")
 

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Comment, User, Post
 from datetime import datetime
-from utils import block_check_required 
+from .utils import block_check_required 
 
 comment_bp = Blueprint('comment_bp', __name__, url_prefix="/api/comments")
 
