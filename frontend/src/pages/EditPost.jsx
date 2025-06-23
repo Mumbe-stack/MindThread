@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 const EditPost = () => {
   const { id } = useParams();
@@ -8,8 +9,12 @@ const EditPost = () => {
 
   useEffect(() => {
     fetch(`/api/posts/${id}`)
-      .then((res) => res.json())
-      .then(setPost);
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch post");
+        return res.json();
+      })
+      .then(setPost)
+      .catch(() => toast.error("Failed to load post"));
   }, [id]);
 
   const handleUpdate = async (e) => {
@@ -26,15 +31,16 @@ const EditPost = () => {
     });
 
     if (res.ok) {
+      toast.success("Post updated successfully");
       navigate(`/posts/${id}`);
     } else {
-      alert("Update failed");
+      toast.error("Failed to update post");
     }
   };
 
   return (
     <div className="max-w-xl mx-auto p-6 mt-10 bg-white shadow rounded">
-      <h2 className="text-2xl font-bold mb-6">Edit Post</h2>
+      <h2 className="text-2xl font-bold mb-6">✏️ Edit Post</h2>
       <form onSubmit={handleUpdate} className="space-y-4">
         <input
           type="text"

@@ -69,46 +69,59 @@ const AdminDashboard = () => {
         ]
       });
     } catch (err) {
-      console.error("Failed to load admin data", err);
+      toast.error("❌ Failed to load admin data");
+      console.error(err);
     }
   };
 
   const handleUserBlockToggle = async (id, block) => {
     const token = localStorage.getItem("token");
-    await fetch(`/api/users/${id}/${block ? "block" : "unblock"}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    toast.success(`User ${block ? "blocked" : "unblocked"}`);
-    fetchData();
+    try {
+      await fetch(`/api/users/${id}/${block ? "block" : "unblock"}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`✅ User ${block ? "blocked" : "unblocked"}`);
+      fetchData();
+    } catch {
+      toast.error("❌ Failed to update user status");
+    }
   };
 
   const handleApproveComment = async (id) => {
     const token = localStorage.getItem("token");
-    await fetch(`/api/comments/${id}/approve`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ is_approved: true })
-    });
-    toast.success("Comment approved");
-    fetchData();
+    try {
+      await fetch(`/api/comments/${id}/approve`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ is_approved: true })
+      });
+      toast.success("✅ Comment approved");
+      fetchData();
+    } catch {
+      toast.error("❌ Could not approve comment");
+    }
   };
 
   const handleApprovePost = async (id) => {
     const token = localStorage.getItem("token");
-    await fetch(`/api/posts/${id}/approve`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ is_approved: true })
-    });
-    toast.success("Post approved");
-    fetchData();
+    try {
+      await fetch(`/api/posts/${id}/approve`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ is_approved: true })
+      });
+      toast.success("✅ Post approved");
+      fetchData();
+    } catch {
+      toast.error("❌ Could not approve post");
+    }
   };
 
   const filteredUsers = users.filter((u) =>
@@ -137,7 +150,7 @@ const AdminDashboard = () => {
 
       {chartData && (
         <div className="bg-white p-4 rounded shadow mb-10">
-          <h3 className="text-lg font-semibold mb-4"> Weekly Activity Trends</h3>
+          <h3 className="text-lg font-semibold mb-4">Weekly Activity Trends</h3>
           <Bar data={chartData} />
         </div>
       )}

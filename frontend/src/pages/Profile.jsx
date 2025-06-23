@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import AvatarUploader from "../components/AvatarUploader";
+import toast from "react-hot-toast"; 
 
 const Profile = () => {
   const { user, logout } = useAuth();
@@ -8,10 +9,14 @@ const Profile = () => {
 
   useEffect(() => {
     fetch("/api/auth/me", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
-      .then((res) => res.json())
-      .then(setProfile);
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load profile");
+        return res.json();
+      })
+      .then(setProfile)
+      .catch(() => toast.error("Failed to load profile"));
   }, []);
 
   const handleDelete = async () => {
@@ -23,7 +28,12 @@ const Profile = () => {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     });
 
-    if (res.ok) logout();
+    if (res.ok) {
+      toast.success("Account deleted");
+      logout();
+    } else {
+      toast.error("Failed to delete account");
+    }
   };
 
   if (!profile) return <p className="text-center p-6">Loading profile...</p>;
@@ -33,7 +43,9 @@ const Profile = () => {
       <h2 className="text-2xl font-bold mb-4 text-center">Your Profile</h2>
       <p className="mb-2"><strong>Username:</strong> {profile.username}</p>
       <p className="mb-2"><strong>Email:</strong> {profile.email}</p>
-      <p className="mb-4 text-sm text-gray-500">Joined: {new Date(profile.created_at).toLocaleDateString()}</p>
+      <p className="mb-4 text-sm text-gray-500">
+        Joined: {new Date(profile.created_at).toLocaleDateString()}
+      </p>
 
       <AvatarUploader />
 

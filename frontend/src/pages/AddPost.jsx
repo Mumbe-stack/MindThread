@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast"; 
 
 const AddPost = () => {
   const [title, setTitle] = useState("");
@@ -21,9 +22,11 @@ const AddPost = () => {
 
     if (res.ok) {
       const data = await res.json();
+      toast.success("Post created successfully!");
       navigate(`/posts/${data.post_id}`);
     } else {
-      alert("Failed to create post");
+      const error = await res.json();
+      toast.error(error?.message || "Failed to create post");
     }
   };
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -8,18 +9,26 @@ const Users = () => {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
       .then((res) => res.json())
-      .then(setUsers);
+      .then(setUsers)
+      .catch(() => toast.error("Failed to load users"));
   }, []);
 
   const toggleBlock = async (id, block) => {
-    await fetch(`/api/users/${id}/${block ? "block" : "unblock"}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    });
-    const updated = users.map((u) =>
-      u.id === id ? { ...u, is_blocked: block } : u
-    );
-    setUsers(updated);
+    try {
+      await fetch(`/api/users/${id}/${block ? "block" : "unblock"}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+
+      const updated = users.map((u) =>
+        u.id === id ? { ...u, is_blocked: block } : u
+      );
+      setUsers(updated);
+
+      toast.success(`User ${block ? "blocked" : "unblocked"}`);
+    } catch {
+      toast.error("Operation failed");
+    }
   };
 
   return (
@@ -40,7 +49,9 @@ const Users = () => {
             <button
               onClick={() => toggleBlock(user.id, !user.is_blocked)}
               className={`px-3 py-1 rounded text-white ${
-                user.is_blocked ? "bg-yellow-500" : "bg-red-600"
+                user.is_blocked
+                  ? "bg-yellow-500 hover:bg-yellow-600"
+                  : "bg-red-600 hover:bg-red-700"
               }`}
             >
               {user.is_blocked ? "Unblock" : "Block"}

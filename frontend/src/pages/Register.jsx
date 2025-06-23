@@ -1,6 +1,6 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast"; 
 
 const Register = () => {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
@@ -8,23 +8,26 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
 
+    const data = await res.json();
+
     if (res.ok) {
+      toast.success("Registered successfully! Please log in.");
       navigate("/login");
     } else {
-      const data = await res.json();
-      alert(data.error || "Registration failed");
+      toast.error(data.error || "Registration failed.");
     }
   };
 
   return (
     <div className="max-w-md mx-auto p-6 mt-20 bg-white shadow rounded">
-      <h2 className="text-2xl font-bold mb-4 text-center">📝 Register</h2>
+      <h2 className="text-2xl font-bold mb-4 text-center">Register</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
@@ -50,7 +53,10 @@ const Register = () => {
           onChange={(e) => setForm({ ...form, password: e.target.value })}
           required
         />
-        <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">
+        <button
+          type="submit"
+          className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700"
+        >
           Register
         </button>
       </form>
