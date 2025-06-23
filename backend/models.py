@@ -1,7 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
-
 db = SQLAlchemy()
 
 comment_likes = db.Table(
@@ -10,7 +9,8 @@ comment_likes = db.Table(
     db.Column('comment_id', db.Integer, db.ForeignKey('comments.id'), primary_key=True)
 )
 
-post_likes = db.Table('post_likes',
+post_likes = db.Table(
+    'post_likes',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True)
 )
@@ -26,10 +26,9 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     is_blocked = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-   
 
-    posts = db.relationship("Post", backref="user", lazy=True)
-    comments = db.relationship("Comment", backref="user", lazy=True)
+    posts = db.relationship("Post", backref="user", lazy=True, cascade="all, delete-orphan")
+    comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan")
 
     liked_comments = db.relationship(
         'Comment',
@@ -37,13 +36,13 @@ class User(db.Model):
         backref=db.backref('liked_by_users', lazy='dynamic'),
         lazy='dynamic'
     )
-    
+
     liked_posts = db.relationship(
         'Post',
         secondary=post_likes,
         backref='liked_by_users',
         lazy='dynamic'
-  )
+    )
 
     def to_dict(self):
         return {
@@ -52,6 +51,10 @@ class User(db.Model):
             "email": self.email,
             "created_at": self.created_at.isoformat()
         }
+
+    def __repr__(self):
+        return f"<User {self.username} (admin={self.is_admin})>"
+
 
 class Post(db.Model):
     __tablename__ = 'posts'
@@ -83,11 +86,11 @@ class Comment(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
-    
     parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+
     is_flagged = db.Column(db.Boolean, default=False, nullable=False)
-    is_approved = db.Column(db.Boolean, default=True) 
-    
+    is_approved = db.Column(db.Boolean, default=True)
+
     votes = db.relationship('Vote', backref='comment', lazy=True)
     likes = db.Column(db.Integer, default=0, nullable=False)
 
@@ -103,11 +106,11 @@ class Vote(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True)
-    comment_id = db.Column(db.Integer, db.ForeignKey(
-        'comments.id'), nullable=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
 
     def __repr__(self):
         return f"<Vote user_id={self.user_id} post_id={self.post_id} comment_id={self.comment_id}>"
+
 
 class TokenBlocklist(db.Model):
     id = db.Column(db.Integer, primary_key=True)

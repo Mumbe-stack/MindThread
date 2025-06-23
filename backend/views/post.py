@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from io import BytesIO
 from datetime import datetime
 from models import db, Post, User
+from utils import block_check_required  
 
 post_bp = Blueprint('post_bp', __name__, url_prefix="/api/posts")
 
@@ -48,6 +49,7 @@ def get_post(id):
 
 @post_bp.route("/", methods=["POST"])
 @jwt_required()
+@block_check_required 
 def create_post():
     data = request.get_json()
     user_id = get_jwt_identity()
@@ -73,6 +75,7 @@ def create_post():
 
 @post_bp.route("/<int:id>", methods=["PUT"])
 @jwt_required()
+@block_check_required 
 def update_post(id):
     post = Post.query.get_or_404(id)
     user_id = get_jwt_identity()
@@ -91,6 +94,7 @@ def update_post(id):
 
 @post_bp.route("/<int:id>", methods=["DELETE"])
 @jwt_required()
+@block_check_required  
 def delete_post(id):
     post = Post.query.get_or_404(id)
     user_id = get_jwt_identity()
@@ -105,6 +109,7 @@ def delete_post(id):
 
 @post_bp.route("/<int:id>/like", methods=["PATCH"])
 @jwt_required()
+@block_check_required  
 def like_post(id):
     post = Post.query.get_or_404(id)
     user = User.query.get(get_jwt_identity())
@@ -123,6 +128,7 @@ def like_post(id):
 
 @post_bp.route("/<int:id>/unlike", methods=["PATCH"])
 @jwt_required()
+@block_check_required 
 def unlike_post(id):
     post = Post.query.get_or_404(id)
     user = User.query.get(get_jwt_identity())
@@ -139,4 +145,14 @@ def unlike_post(id):
     }), 200
 
 
-
+def to_dict(self):
+    return {
+        "id": self.id,
+        "title": self.title,
+        "content": self.content,
+        "tags": self.tags,
+        "created_at": self.created_at.isoformat(),
+        "user_id": self.user_id,
+        "is_approved": self.is_approved,
+        "is_flagged": self.is_flagged
+    }

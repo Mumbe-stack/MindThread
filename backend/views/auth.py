@@ -8,7 +8,7 @@ from models import db, User, TokenBlocklist
 
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
 
-# ✅ Register
+
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
@@ -23,7 +23,7 @@ def register():
     new_user = User(
         username=data["username"],
         email=data["email"],
-        password_hash=hashed_pw  # ✅ Corrected field name
+        password_hash=hashed_pw
     )
     db.session.add(new_user)
     db.session.commit()
@@ -31,7 +31,6 @@ def register():
     return jsonify({"success": True, "message": "User registered successfully"}), 201
 
 
-# ✅ Login
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -42,8 +41,12 @@ def login():
         return jsonify({"error": "Email and password required"}), 400
 
     user = User.query.filter_by(email=email).first()
-    if not user or not check_password_hash(user.password_hash, password):  # ✅ Corrected field
+
+    if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid credentials"}), 401
+
+    if user.is_blocked:
+        return jsonify({"error": "Your account has been blocked. Contact support."}), 403
 
     access_token = create_access_token(identity=user.id)
 
@@ -56,7 +59,6 @@ def login():
     }), 200
 
 
-# ✅ Get current user info
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
@@ -72,7 +74,6 @@ def get_current_user():
     }), 200
 
 
-# ✅ Logout with token blocklisting
 @auth_bp.route("/logout", methods=["DELETE"])
 @jwt_required()
 def logout():

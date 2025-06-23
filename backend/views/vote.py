@@ -1,12 +1,14 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, User, Post, Comment, Vote
+from utils import block_check_required  
 
 vote_bp = Blueprint("vote_bp", __name__, url_prefix="/api/votes")
 
 
 @vote_bp.route("/post", methods=["POST"])
 @jwt_required()
+@block_check_required 
 def vote_post():
     data = request.get_json()
     user_id = get_jwt_identity()
@@ -41,6 +43,7 @@ def get_post_score(post_id):
 
 @vote_bp.route("/comment", methods=["POST"])
 @jwt_required()
+@block_check_required  
 def vote_comment():
     data = request.get_json()
     user_id = get_jwt_identity()
@@ -87,13 +90,13 @@ def get_comment_score(comment_id):
 
 @vote_bp.route("/post/<int:post_id>", methods=["DELETE"])
 @jwt_required()
+@block_check_required  
 def delete_vote_on_post(post_id):
     user_id = get_jwt_identity()
 
     post = Post.query.get(post_id)
     if not post:
         return jsonify({"error": f"Post ID {post_id} does not exist"}), 404
-
 
     vote = Vote.query.filter_by(user_id=user_id, post_id=post_id).first()
     if not vote:
@@ -107,6 +110,7 @@ def delete_vote_on_post(post_id):
 
 @vote_bp.route("/comment/<int:comment_id>", methods=["DELETE"])
 @jwt_required()
+@block_check_required 
 def delete_comment_vote(comment_id):
     user_id = get_jwt_identity()
 
@@ -123,3 +127,12 @@ def delete_comment_vote(comment_id):
 
     return jsonify({"success": "Vote on comment removed"}), 200
 
+
+def to_dict(self):
+    return {
+        "id": self.id,
+        "value": self.value,
+        "user_id": self.user_id,
+        "post_id": self.post_id,
+        "comment_id": self.comment_id
+    }
