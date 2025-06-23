@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -14,7 +13,7 @@ const Home = () => {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6 text-center text-indigo-800">📰 Latest Posts</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center text-indigo-800">MindThread Blogging App</h1>
       {posts.length === 0 ? (
         <p className="text-gray-500 text-center">No posts available.</p>
       ) : (
