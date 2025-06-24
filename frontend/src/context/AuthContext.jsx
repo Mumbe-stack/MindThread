@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
+const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
+  const [token, setToken] = useState(localStorage.getItem("token"));
 
   useEffect(() => {
     if (token) fetchCurrentUser();
@@ -15,8 +16,10 @@ export const AuthProvider = ({ children }) => {
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch("/api/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${api_url}/api/users/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (res.ok) {
@@ -30,6 +33,7 @@ export const AuthProvider = ({ children }) => {
         });
       } else {
         localStorage.removeItem("token");
+        setToken(null);
         setUser(null);
       }
     } catch {
@@ -39,9 +43,11 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${api_url}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ email, password }),
       });
 
@@ -49,6 +55,7 @@ export const AuthProvider = ({ children }) => {
 
       if (res.ok) {
         localStorage.setItem("token", data.access_token);
+        setToken(data.access_token);
         setUser({
           id: data.user_id,
           username: data.username,
@@ -69,9 +76,11 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (form) => {
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch(`${api_url}/api/auth/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(form),
       });
 
@@ -90,13 +99,16 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      const res = await fetch("/api/auth/logout", {
+      const res = await fetch(`${api_url}/api/auth/logout`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (res.ok) {
         localStorage.removeItem("token");
+        setToken(null);
         setUser(null);
         toast.success("Logged out successfully");
         navigate("/");
@@ -110,7 +122,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (updates) => {
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await fetch(`${api_url}/api/users/${user.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -132,9 +144,11 @@ export const AuthProvider = ({ children }) => {
 
   const deleteUser = async () => {
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await fetch(`${api_url}/api/users/${user.id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (res.ok) {
@@ -150,12 +164,13 @@ export const AuthProvider = ({ children }) => {
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch("/api/users/", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${api_url}/api/users/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!res.ok) throw new Error("Failed to fetch users");
-
       return await res.json();
     } catch (err) {
       toast.error("Unable to fetch users");
@@ -167,6 +182,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        token,
         login,
         register,
         logout,
@@ -179,6 +195,5 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
 
 export const useAuth = () => useContext(AuthContext);
