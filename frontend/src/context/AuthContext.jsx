@@ -41,38 +41,41 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
-    try {
-      const res = await fetch(`${api_url}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
+ const login = async (email, password) => {
+  try {
+    const res = await fetch(`${api_url}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", 
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      localStorage.setItem("token", data.access_token);
+      setToken(data.access_token);
+      setUser({
+        id: data.user_id,
+        username: data.username,
+        is_admin: data.is_admin,
       });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        localStorage.setItem("token", data.access_token);
-        setToken(data.access_token);
-        setUser({
-          id: data.user_id,
-          username: data.username,
-          is_admin: data.is_admin,
-        });
-        toast.success("Login successful");
-        navigate("/");
-        return true;
-      } else {
-        toast.error(data.error || "Invalid credentials");
-        return false;
-      }
-    } catch {
-      toast.error("Network error during login");
+      toast.success("Login successful");
+      navigate("/"); 
+      return true;
+    } else {
+      toast.error(data.error || "Invalid credentials");
       return false;
     }
-  };
+  } catch (err) {
+    console.error("Login error:", err);
+    toast.error("Network error during login");
+    return false;
+  }
+};
+
 
   const register = async (form) => {
     try {
