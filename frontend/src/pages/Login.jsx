@@ -1,23 +1,22 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import toast from "react-hot-toast"; 
+import { useUser } from "../context/UserContext"; 
+import toast from "react-hot-toast";
 
 const Login = () => {
-  const { login } = useAuth();
+  const { login_user } = useUser(); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const success = await login(email, password);
-
+    const success = await login_user(email, password);
     if (success) {
-      toast.success("Login successful!");
-      navigate("/");
+      toast.success("Login successful");
+      navigate("/"); 
     } else {
-      toast.error("Invalid email or password.");
+      toast.error("Login failed. Please check your credentials.");
     }
   };
 

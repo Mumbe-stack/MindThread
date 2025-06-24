@@ -1,28 +1,13 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast"; 
+import { useContext, useState } from "react";
+import { UserContext } from "../context/UserContext";
 
 const Register = () => {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const navigate = useNavigate();
+  const { register_user } = useContext(UserContext);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      toast.success("Registered successfully! Please log in.");
-      navigate("/login");
-    } else {
-      toast.error(data.error || "Registration failed.");
-    }
+    register_user(form.username, form.email, form.password);
   };
 
   return (
