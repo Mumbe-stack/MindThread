@@ -32,7 +32,6 @@ def register():
     db.session.add(new_user)
     db.session.commit()
 
-    # ✅ Send welcome email
     try:
         msg = Message("Welcome to MindThread!", recipients=[new_user.email])
         msg.body = f"Hi {new_user.username},\n\nWelcome to MindThread! We're excited to have you onboard.\n\nHappy posting!\nMindThread Team"

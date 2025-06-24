@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
+const api_url = import.meta.env.VITE_API_URL || "";
+
 const EditPost = () => {
   const { id } = useParams();
   const [post, setPost] = useState({ title: "", content: "" });
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`/api/posts/${id}`)
+    fetch(`${api_url}/api/posts/${id}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch post");
         return res.json();
@@ -21,8 +23,8 @@ const EditPost = () => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
-    const res = await fetch(`/api/posts/${id}`, {
-      method: "PUT",
+    const res = await fetch(`${api_url}/api/posts/${id}`, {
+      method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
@@ -45,12 +47,14 @@ const EditPost = () => {
         <input
           type="text"
           className="w-full border p-2 rounded"
+          placeholder="Post title"
           value={post.title}
           onChange={(e) => setPost({ ...post, title: e.target.value })}
           required
         />
         <textarea
           className="w-full border p-2 rounded h-40"
+          placeholder="Post content"
           value={post.content}
           onChange={(e) => setPost({ ...post, content: e.target.value })}
           required

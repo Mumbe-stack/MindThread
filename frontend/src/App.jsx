@@ -1,61 +1,42 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { Toaster } from "react-hot-toast"; 
 import { useAuth } from "./context/AuthContext";
+import { Toaster } from "react-hot-toast";
 
+import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
-import SinglePost from "./pages/SinglePost";
+import Users from "./pages/Users";
 import AddPost from "./pages/AddPost";
 import EditPost from "./pages/EditPost";
-import Users from "./pages/Users";
+import SinglePost from "./pages/SinglePost";
 import AdminDashboard from "./pages/AdminDashboard";
-import NotFound from "./pages/NotFound"; 
-import Layout from "./components/Layout";
+import NotFound from "./pages/NotFound";
 
-const App = () => {
+function App() {
   const { user } = useAuth();
+  const isAdmin = user?.is_admin;
 
   return (
     <>
-      {/* Toast Notifications */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: "#1f2937",
-            color: "#fff",
-            fontSize: "14px"
-          },
-        }}
-      />
-
-      <Layout>
-        <Routes>
+      <Toaster position="top-right" reverseOrder={false} />
+      <Routes>
+        <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-
-          <Route
-            path="/profile"
-            element={user ? <Profile /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/admin"
-            element={user && user.is_admin ? <AdminDashboard /> : <Navigate to="/" />}
-          />
-
-          <Route path="/posts/new" element={<AddPost />} />
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+          <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
+          <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/users" element={isAdmin ? <Users /> : <Navigate to="/" />} />
+          <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/" />} />
+          <Route path="/posts/new" element={user ? <AddPost /> : <Navigate to="/login" />} />
           <Route path="/posts/:id" element={<SinglePost />} />
-          <Route path="/posts/:id/edit" element={<EditPost />} />
-          <Route path="/users" element={<Users />} />
-
+          <Route path="/posts/:id/edit" element={user ? <EditPost /> : <Navigate to="/login" />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Layout>
+        </Route>
+      </Routes>
     </>
   );
-};
+}
 
 export default App;

@@ -28,10 +28,12 @@ app.config['MAIL_USERNAME'] = "projectappmail1998@gmail.com"
 app.config['MAIL_PASSWORD'] = "hirm xovn cikd jskq"
 app.config['MAIL_DEFAULT_SENDER'] = "yourrmail@gmail.com"
 
-# === Init Extensions === #
+
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
+
 mail = Mail(app)
 jwt = JWTManager(app)
 
