@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 
 const Home = () => {
   const [posts, setPosts] = useState([]);
+  const baseURL = import.meta.env.VITE_API_BASE_URL;
 
   useEffect(() => {
-    fetch("/api/posts")
+    fetch(`${baseURL}/posts`)
       .then((res) => res.json())
       .then(setPosts)
       .catch((err) => console.error("Failed to load posts", err));
-  }, []);
+  }, [baseURL]);
 
   return (
     <div className="max-w-5xl mx-auto p-6">

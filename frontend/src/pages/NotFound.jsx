@@ -1,48 +1,18 @@
-import { Routes, Route } from "react-router-dom";
-import { Toaster } from "react-hot-toast"; 
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Profile from "./pages/Profile";
-import SinglePost from "./pages/SinglePost";
-import AddPost from "./pages/AddPost";
-import EditPost from "./pages/EditPost";
-import Users from "./pages/Users";
-import AdminDashboard from "./pages/AdminDashboard";
-import NotFound from "./pages/NotFound"; 
-import Layout from "./components/Layout";
+import { Link } from "react-router-dom";
 
-const App = () => {
+const NotFound = () => {
   return (
-    <>
-      {/* Toast Notifications */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: "#1f2937",
-            color: "#fff",
-            fontSize: "14px"
-          },
-        }}
-      />
-
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/posts/new" element={<AddPost />} />
-          <Route path="/posts/:id" element={<SinglePost />} />
-          <Route path="/posts/:id/edit" element={<EditPost />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="*" element={<NotFound />} /> {/* Catch-all route */}
-        </Routes>
-      </Layout>
-    </>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-6">
+      <h1 className="text-6xl font-bold text-indigo-600 mb-4">404</h1>
+      <p className="text-xl text-gray-700 mb-6">Oops! Page not found.</p>
+      <Link
+        to="/"
+        className="text-white bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded shadow"
+      >
+        Return to Home
+      </Link>
+    </div>
   );
 };
 
-export default App;
+export default NotFound;

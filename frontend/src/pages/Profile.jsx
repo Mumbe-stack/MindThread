@@ -1,23 +1,33 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import AvatarUploader from "../components/AvatarUploader";
-import toast from "react-hot-toast"; 
+import toast from "react-hot-toast";
 
 const Profile = () => {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("/api/auth/me", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load profile");
-        return res.json();
+    if (!user) {
+      navigate("/login");
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      fetch("/api/auth/me", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       })
-      .then(setProfile)
-      .catch(() => toast.error("Failed to load profile"));
-  }, []);
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to load profile");
+          return res.json();
+        })
+        .then(setProfile)
+        .catch(() => toast.error("Failed to load profile"));
+    }
+  }, [user]);
 
   const handleDelete = async () => {
     const confirm = window.confirm("Are you sure you want to delete your account?");
@@ -36,7 +46,7 @@ const Profile = () => {
     }
   };
 
-  if (!profile) return <p className="text-center p-6">Loading profile...</p>;
+  if (!user || !profile) return <p className="text-center p-6">Loading profile...</p>;
 
   return (
     <div className="max-w-lg mx-auto p-6 bg-white shadow rounded mt-10">
