@@ -14,7 +14,7 @@ const Navbar = () => {
               to="/"
               className="text-2xl font-semibold hover:text-indigo-400 transition cursor-pointer"
             >
-              MindThread Blogging App
+              MindThread 
             </Link>
           </div>
 
@@ -25,6 +25,13 @@ const Navbar = () => {
               className="hover:text-indigo-300 transition cursor-pointer"
             >
               Home
+            </Link>
+
+            <Link
+              to="/posts"
+              className="hover:text-indigo-300 transition cursor-pointer"
+            >
+              Posts
             </Link>
 
             {user ? (

@@ -1,34 +1,18 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const Home = () => {
-  const [posts, setPosts] = useState([]);
-  const baseURL = import.meta.env.VITE_API_BASE_URL;
-
-  useEffect(() => {
-    fetch(`${baseURL}/posts/`)
-      .then((res) => res.json())
-      .then(setPosts)
-      .catch((err) => console.error("Failed to load posts", err));
-  }, [baseURL]);
-
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6 text-center text-indigo-800">MindThread Blogging App</h1>
-      {posts.length === 0 ? (
-        <p className="text-gray-500 text-center">No posts available.</p>
-      ) : (
-        <div className="grid gap-4">
-          {posts.map((post) => (
-            <div key={post.id} className="border p-4 rounded shadow hover:shadow-md transition">
-              <Link to={`/posts/${post.id}`}>
-                <h2 className="text-xl font-semibold text-blue-700 hover:underline">{post.title}</h2>
-                <p className="text-gray-600 mt-1">{post.content.slice(0, 120)}...</p>
-              </Link>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="max-w-3xl mx-auto p-8 text-center">
+      <h1 className="text-4xl font-bold text-indigo-700 mb-4">Welcome to MindThread</h1>
+      <p className="text-gray-600 text-lg mb-6">
+        A modern blogging platform to share ideas, stories, and insights with the world.
+      </p>
+      <Link
+        to="/posts"
+        className="inline-block bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 transition"
+      >
+        Explore Posts
+      </Link>
     </div>
   );
 };
