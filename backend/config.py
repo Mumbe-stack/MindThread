@@ -8,7 +8,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     JWT_SECRET_KEY = "jwt_secret_key"
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=48)
     JWT_TOKEN_LOCATION = ["headers"] 
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ["access"]
