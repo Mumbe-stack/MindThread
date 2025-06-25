@@ -70,29 +70,36 @@ def create_comment():
     }), 201
 
 
-@comment_bp.route("/<int:id>/like", methods=["PATCH"])
-@jwt_required()
-@block_check_required
-def like_comment(id):
+@comment_bp.route("/<int:comment_id>/like/", methods=["POST", "OPTIONS"])
+def like_comment(comment_id):
+    if request.method == "OPTIONS":
+        return jsonify({"ok": True}), 200
+
+    from flask_jwt_extended import verify_jwt_in_request
+
+    
+    verify_jwt_in_request()
     user_id = get_jwt_identity()
-    comment = Comment.query.get_or_404(id)
-    user = User.query.get(user_id)
+    
+    comment = Comment.query.get_or_404(comment_id)
+    user = User.query.get_or_404(user_id)
 
     if comment in user.liked_comments:
-        return jsonify({"error": "You have already liked this comment"}), 400
-
-    user.liked_comments.append(comment)
-    db.session.commit()
-
-    return jsonify({
-        "message": f"Comment ID {id} liked",
-        "likes": comment.likes_count,
-        "liked_by": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }
-    }), 200
+        user.liked_comments.remove(comment)  
+        db.session.commit()
+        return jsonify({
+            "message": f"Comment ID {comment_id} unliked",
+            "likes": comment.likes,
+            "liked_by": [u.id for u in comment.liked_by_users]
+        }), 200
+    else:
+        user.liked_comments.append(comment)  
+        db.session.commit()
+        return jsonify({
+            "message": f"Comment ID {comment_id} liked",
+            "likes": comment.likes,
+            "liked_by": [u.id for u in comment.liked_by_users]
+        }), 200
 
 
 @comment_bp.route("/<int:id>/unlike", methods=["PATCH"])

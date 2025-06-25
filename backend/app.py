@@ -7,7 +7,7 @@ from flask_mail import Mail
 from flask_jwt_extended import JWTManager
 
 from models import db, TokenBlocklist
-from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp, home_bp
+from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp
 from views.admin import admin_bp  
 
 app = Flask(__name__)
@@ -39,7 +39,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 db.init_app(app)
 migrate = Migrate(app, db)
 
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"], expose_headers=["Authorization"])
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 
 mail = Mail(app)
 jwt = JWTManager(app)

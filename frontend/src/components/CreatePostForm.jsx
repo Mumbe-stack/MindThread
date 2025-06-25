@@ -1,6 +1,6 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
-import RichTextEditor from "./RichTextEditor";
+import RichTextEditor from '../components/RichTextEditor';
 
 const CreatePostForm = ({ onClose }) => {
   const [title, setTitle] = useState("");
@@ -15,15 +15,15 @@ const CreatePostForm = ({ onClose }) => {
       return;
     }
 
-    try {
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ title, content })
-      });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
+      method: "POST", 
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ title, content })
+    });
 
       if (res.ok) {
         toast.success("Post created successfully");

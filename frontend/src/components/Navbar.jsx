@@ -30,22 +30,6 @@ const Navbar = () => {
             {user ? (
               <>
                 <Link
-                  to="/posts"
-                  className="hover:text-indigo-300 transition cursor-pointer"
-                >
-                  Posts
-                </Link>
-
-                {!user.is_admin && (
-                  <Link
-                    to="/create"
-                    className="hover:text-indigo-300 transition cursor-pointer"
-                  >
-                    Create Post
-                  </Link>
-                )}
-
-                <Link
                   to="/profile"
                   className="hover:text-indigo-300 transition cursor-pointer"
                 >

@@ -360,5 +360,14 @@ def get_user_stats(user_id):
         current_app.logger.exception("Failed to fetch user stats")
         return jsonify({"error": "Failed to fetch user stats"}), 500
 
+@user_bp.route("/<int:id>", methods=["DELETE"])
+@jwt_required()
+def delete_user(id):
+    admin = User.query.get(get_jwt_identity())
+    if not admin or not admin.is_admin:
+        return jsonify({"error": "Admin only"}), 403
 
-
+    target = User.query.get_or_404(id)
+    db.session.delete(target)
+    db.session.commit()
+    return jsonify({"message": f"User {id} deleted"}), 200

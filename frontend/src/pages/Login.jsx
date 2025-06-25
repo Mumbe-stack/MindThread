@@ -1,16 +1,18 @@
 import { useState, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || "/";
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const calledRef = useRef(false); 
+  const calledRef = useRef(false); // Prevent double navigation
 
   const validateForm = () => {
     const newErrors = {};
@@ -48,9 +50,9 @@ const Login = () => {
       const success = await login(formData.email, formData.password);
 
       if (success && !calledRef.current) {
-        calledRef.current = true; 
+        calledRef.current = true;
         toast.success("Login successful!");
-        navigate("/");
+        navigate(from);
       } else if (!success) {
         toast.error("Invalid email or password.");
       }
@@ -104,7 +106,7 @@ const Login = () => {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? "Signing in..." : "Login"}
         </button>

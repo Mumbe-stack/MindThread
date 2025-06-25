@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
-const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const navigate = useNavigate();
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (token) fetchCurrentUser();
@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users/me`, {
+      const res = await fetch(`${api_url}/users/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -32,54 +32,56 @@ export const AuthProvider = ({ children }) => {
           created_at: data.created_at,
         });
       } else {
-        localStorage.removeItem("token");
-        setToken(null);
-        setUser(null);
+        handleUnauth();
       }
     } catch {
       toast.error("Failed to fetch user data");
+      handleUnauth();
     }
   };
 
- const login = async (email, password) => {
-  try {
-    const res = await fetch(`${api_url}/api/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include", 
-      body: JSON.stringify({ email, password }),
-    });
+  const handleUnauth = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+  };
 
-    const data = await res.json();
-
-    if (res.ok) {
-      localStorage.setItem("token", data.access_token);
-      setToken(data.access_token);
-      setUser({
-        id: data.user_id,
-        username: data.username,
-        is_admin: data.is_admin,
+  const login = async (email, password) => {
+    try {
+      const res = await fetch(`${api_url}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
       });
-      toast.success("Login successful");
-      navigate("/"); 
-      return true;
-    } else {
-      toast.error(data.error || "Invalid credentials");
+
+      const data = await res.json();
+
+      if (res.ok) {
+        localStorage.setItem("token", data.access_token);
+        setToken(data.access_token);
+        setUser({
+          id: data.user_id,
+          username: data.username,
+          is_admin: data.is_admin,
+        });
+        return true;
+      } else {
+        toast.error(data.error || "Invalid credentials");
+        return false;
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      toast.error("Network error during login");
       return false;
     }
-  } catch (err) {
-    console.error("Login error:", err);
-    toast.error("Network error during login");
-    return false;
-  }
-};
-
+  };
 
   const register = async (form) => {
     try {
-      const res = await fetch(`${api_url}/api/auth/register`, {
+      const res = await fetch(`${api_url}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -102,7 +104,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      const res = await fetch(`${api_url}/api/auth/logout`, {
+      const res = await fetch(`${api_url}/auth/logout`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -110,22 +112,21 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (res.ok) {
-        localStorage.removeItem("token");
-        setToken(null);
-        setUser(null);
         toast.success("Logged out successfully");
-        navigate("/");
       } else {
         toast.error("Logout failed");
       }
     } catch {
       toast.error("Network error during logout");
+    } finally {
+      handleUnauth();
+      navigate("/");
     }
   };
 
   const updateProfile = async (updates) => {
     try {
-      const res = await fetch(`${api_url}/api/users/${user.id}`, {
+      const res = await fetch(`${api_url}/users/${user.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -147,7 +148,7 @@ export const AuthProvider = ({ children }) => {
 
   const deleteUser = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users/${user.id}`, {
+      const res = await fetch(`${api_url}/users/${user.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -156,7 +157,7 @@ export const AuthProvider = ({ children }) => {
 
       if (res.ok) {
         toast.success("Account deleted");
-        logout();
+        await logout();
       } else {
         toast.error("Failed to delete account");
       }
@@ -167,7 +168,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users/`, {
+      const res = await fetch(`${api_url}/users/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -175,7 +176,7 @@ export const AuthProvider = ({ children }) => {
 
       if (!res.ok) throw new Error("Failed to fetch users");
       return await res.json();
-    } catch (err) {
+    } catch {
       toast.error("Unable to fetch users");
       return [];
     }

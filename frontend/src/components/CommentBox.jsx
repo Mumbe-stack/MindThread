@@ -1,6 +1,6 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
-
+import LikeButton from "./LikeButton";
 const CommentBox = ({ postId, onCommentSubmit }) => {
   const [content, setContent] = useState("");
 
