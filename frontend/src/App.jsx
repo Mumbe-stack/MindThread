@@ -17,6 +17,11 @@ import NotFound from "./pages/NotFound";
 
 function App() {
   const { user } = useAuth();
+
+  if (user === undefined) {
+    return <div className="p-10 text-center">Loading...</div>;
+  }
+
   const isAdmin = user?.is_admin;
 
   return (
@@ -35,7 +40,6 @@ function App() {
           <Route path="/posts/:id" element={<SinglePost />} />
           <Route path="/posts/:id/edit" element={user ? <EditPost /> : <Navigate to="/login" />} />
           <Route path="*" element={<NotFound />} />
-          
         </Route>
       </Routes>
     </>

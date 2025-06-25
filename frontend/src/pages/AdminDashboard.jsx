@@ -33,14 +33,16 @@ const AdminDashboard = () => {
   const [exportData, setExportData] = useState([]);
 
   useEffect(() => {
-    if (!user?.is_admin) return;
-    fetchData();
-  }, [user]);
+  console.log("Admin dashboard mounted. User:", user);
+}, [user]);
+ 
 
   const fetchData = async () => {
     const token = localStorage.getItem("token");
     try {
-      const [s, c, p, u, trends] = await Promise.all([
+      const [
+        s, c, p, u, trends
+      ] = await Promise.all([
         fetch("/api/admin/stats", { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
         fetch("/api/admin/flagged/comments", { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
         fetch("/api/admin/flagged/posts", { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json()),
@@ -53,19 +55,12 @@ const AdminDashboard = () => {
       setFlaggedPosts(p);
       setUsers(u);
       setExportData(u);
+
       setChartData({
         labels: trends.labels,
         datasets: [
-          {
-            label: "New Posts",
-            data: trends.posts,
-            backgroundColor: "#34d399"
-          },
-          {
-            label: "New Users",
-            data: trends.users,
-            backgroundColor: "#60a5fa"
-          }
+          { label: "New Posts", data: trends.posts, backgroundColor: "#34d399" },
+          { label: "New Users", data: trends.users, backgroundColor: "#60a5fa" }
         ]
       });
     } catch (err) {
@@ -74,7 +69,8 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleUserBlockToggle = async (id, block) => {
+  const handleUserBlockToggle = async (id, block, e) => {
+    e.preventDefault();
     const token = localStorage.getItem("token");
     try {
       await fetch(`/api/users/${id}/${block ? "block" : "unblock"}`, {
@@ -88,7 +84,8 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleApproveComment = async (id) => {
+  const handleApproveComment = async (id, e) => {
+    e.preventDefault();
     const token = localStorage.getItem("token");
     try {
       await fetch(`/api/comments/${id}/approve`, {
@@ -106,7 +103,8 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleApprovePost = async (id) => {
+  const handleApprovePost = async (id, e) => {
+    e.preventDefault();
     const token = localStorage.getItem("token");
     try {
       await fetch(`/api/posts/${id}/approve`, {
@@ -124,63 +122,63 @@ const AdminDashboard = () => {
     }
   };
 
-  const filteredUsers = users.filter((u) =>
+  const filteredUsers = users.filter(u =>
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="max-w-6xl mx-auto p-6 text-gray-800">
-      <h1 className="text-4xl font-extrabold mb-6 text-blue-800">🛡️ Admin Dashboard</h1>
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto p-6">
+      <h1 className="text-4xl font-extrabold text-blue-800 text-center">🛡️ Admin Dashboard</h1>
 
-      <div className="flex gap-4 mb-4">
-        <button onClick={() => setShowUserForm(true)} className="bg-indigo-600 text-white px-4 py-2 rounded shadow">
+      <div className="flex flex-wrap justify-center gap-4">
+        <button type="button" onClick={(e) => { e.preventDefault(); setShowUserForm(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded shadow">
           ➕ Create User
         </button>
-        <button onClick={() => setShowPostForm(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow">
+        <button type="button" onClick={(e) => { e.preventDefault(); setShowPostForm(true); }} className="bg-blue-600 text-white px-4 py-2 rounded shadow">
           ➕ Create Post
         </button>
         <ExportCSV data={exportData} filename="users_report.csv" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
-        <div className="bg-blue-200 p-4 rounded shadow font-medium">👤 Users: {stats.users}</div>
-        <div className="bg-green-200 p-4 rounded shadow font-medium">📝 Posts: {stats.posts}</div>
-        <div className="bg-red-200 p-4 rounded shadow font-medium">🚩 Flagged: {stats.flagged}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-blue-200 p-4 rounded shadow text-center font-medium">👤 Users: {stats.users}</div>
+        <div className="bg-green-200 p-4 rounded shadow text-center font-medium">📝 Posts: {stats.posts}</div>
+        <div className="bg-red-200 p-4 rounded shadow text-center font-medium">🚩 Flagged: {stats.flagged}</div>
       </div>
 
       {chartData && (
-        <div className="bg-white p-4 rounded shadow mb-10">
-          <h3 className="text-lg font-semibold mb-4">Weekly Activity Trends</h3>
+        <div className="bg-white p-4 rounded shadow w-full">
+          <h3 className="text-lg font-semibold mb-4 text-center">📊 Weekly Activity Trends</h3>
           <Bar data={chartData} />
         </div>
       )}
 
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">🚩 Flagged Comments</h2>
-        {flaggedComments.map((c) => (
-          <div key={c.id} className="border border-gray-200 p-3 rounded mb-2 bg-gray-50 shadow-sm">
-            <p className="mb-2 cursor-pointer underline" onClick={() => setSelectedComment(c)}>{c.content}</p>
-            <button
-              onClick={() => handleApproveComment(c.id)}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-            >✅ Approve</button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section>
+          <h2 className="text-xl font-bold mb-3">🚩 Flagged Comments</h2>
+          <div className="space-y-2">
+            {flaggedComments.map((c) => (
+              <div key={c.id} className="flex justify-between items-center border p-3 bg-gray-50 rounded shadow-sm">
+                <p className="flex-1 mr-4 underline cursor-pointer" onClick={() => setSelectedComment(c)}>{c.content}</p>
+                <button type="button" onClick={(e) => handleApproveComment(c.id, e)} className="bg-green-600 text-white px-3 py-1 rounded">✅ Approve</button>
+              </div>
+            ))}
           </div>
-        ))}
-      </section>
+        </section>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-3">🚩 Flagged Posts</h2>
-        {flaggedPosts.map((p) => (
-          <div key={p.id} className="border border-gray-200 p-3 rounded mb-2 bg-gray-50 shadow-sm">
-            <p className="font-semibold text-lg cursor-pointer underline" onClick={() => setSelectedPost(p)}>{p.title}</p>
-            <p className="text-sm text-gray-600 mb-2">{p.content.slice(0, 150)}...</p>
-            <button
-              onClick={() => handleApprovePost(p.id)}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-            >✅ Approve</button>
+        <section>
+          <h2 className="text-xl font-bold mb-3">🚩 Flagged Posts</h2>
+          <div className="space-y-2">
+            {flaggedPosts.map((p) => (
+              <div key={p.id} className="border p-3 rounded bg-gray-50 shadow-sm">
+                <p className="font-semibold text-lg underline cursor-pointer" onClick={() => setSelectedPost(p)}>{p.title}</p>
+                <p className="text-sm text-gray-600 mb-2">{p.content.slice(0, 150)}...</p>
+                <button type="button" onClick={(e) => handleApprovePost(p.id, e)} className="bg-green-600 text-white px-3 py-1 rounded">✅ Approve</button>
+              </div>
+            ))}
           </div>
-        ))}
-      </section>
+        </section>
+      </div>
 
       <section>
         <h2 className="text-xl font-bold mb-3">Manage Users</h2>
@@ -191,17 +189,20 @@ const AdminDashboard = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        {filteredUsers.map((u) => (
-          <div key={u.id} className="flex justify-between items-center border-b py-2">
-            <p>{u.username} ({u.email})</p>
-            <button
-              onClick={() => handleUserBlockToggle(u.id, !u.is_blocked)}
-              className={`px-3 py-1 rounded text-white ${u.is_blocked ? "bg-yellow-500 hover:bg-yellow-600" : "bg-red-600 hover:bg-red-700"}`}
-            >
-              {u.is_blocked ? "Unblock" : "Block"}
-            </button>
-          </div>
-        ))}
+        <div className="divide-y">
+          {filteredUsers.map((u) => (
+            <div key={u.id} className="flex justify-between items-center py-2">
+              <p>{u.username} ({u.email})</p>
+              <button
+                type="button"
+                onClick={(e) => handleUserBlockToggle(u.id, !u.is_blocked, e)}
+                className={`px-3 py-1 rounded text-white ${u.is_blocked ? "bg-yellow-500" : "bg-red-600"}`}
+              >
+                {u.is_blocked ? "Unblock" : "Block"}
+              </button>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Modals */}

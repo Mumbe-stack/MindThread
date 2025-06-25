@@ -22,25 +22,29 @@ const Profile = () => {
     }
   }, [user]);
 
-  const fetchUserStats = async () => {
-    try {
-      const response = await fetch(`/api/users/${user.id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+const fetchUserStats = async () => {
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${user.id}/stats/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (response.ok) {
+      const userData = await response.json();
+      setUserStats({
+        posts: userData.posts || 0,
+        comments: userData.comments || 0,
       });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUserStats({
-          posts: userData.posts?.length || 0,
-          comments: userData.comments?.length || 0,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch user stats:", error);
+    } else {
+      const errorText = await response.text();
+      console.error("Fetch failed:", errorText);
     }
-  };
+  } catch (error) {
+    console.error("Failed to fetch user stats:", error);
+  }
+};
+
 
   const handleDelete = async () => {
     const confirmMessage = `Are you sure you want to delete your account? This action cannot be undone.

@@ -49,8 +49,10 @@ class User(db.Model):
             "id": self.id,
             "username": self.username,
             "email": self.email,
+            "is_admin": self.is_admin,
+                "is_blocked": self.is_blocked,
             "created_at": self.created_at.isoformat()
-        }
+    }
 
     def __repr__(self):
         return f"<User {self.username} (admin={self.is_admin})>"

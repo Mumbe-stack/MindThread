@@ -14,7 +14,7 @@ const Navbar = () => {
               to="/"
               className="text-2xl font-semibold hover:text-indigo-400 transition cursor-pointer"
             >
-              MindThread 
+              MindThread
             </Link>
           </div>
 
@@ -27,23 +27,16 @@ const Navbar = () => {
               Home
             </Link>
 
-            <Link
-              to="/posts"
-              className="hover:text-indigo-300 transition cursor-pointer"
-            >
-              Posts
-            </Link>
-
             {user ? (
               <>
-                {user.is_admin ? (
-                  <Link
-                    to="/users"
-                    className="hover:text-indigo-300 transition cursor-pointer"
-                  >
-                    Users
-                  </Link>
-                ) : (
+                <Link
+                  to="/posts"
+                  className="hover:text-indigo-300 transition cursor-pointer"
+                >
+                  Posts
+                </Link>
+
+                {!user.is_admin && (
                   <Link
                     to="/create"
                     className="hover:text-indigo-300 transition cursor-pointer"

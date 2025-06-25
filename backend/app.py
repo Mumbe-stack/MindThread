@@ -39,8 +39,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 db.init_app(app)
 migrate = Migrate(app, db)
 
-
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
+CORS(app, supports_credentials=True, origins=["http://localhost:5173"], expose_headers=["Authorization"])
 
 mail = Mail(app)
 jwt = JWTManager(app)

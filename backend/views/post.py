@@ -25,23 +25,19 @@ def list_posts():
         return jsonify({"error": f"Failed to fetch posts: {str(e)}"}), 500
 
 
-@post_bp.route("/<int:id>", methods=["GET"])
+@post_bp.route("/", methods=["GET"])
 @jwt_required(optional=True)
-def get_post(id):
-    
+def get_all_posts():
     try:
-        post = Post.query.get_or_404(id)
         current_user = get_jwt_identity()
+        user = User.query.get(current_user) if current_user else None
 
-        
-        if not post.is_approved:
-            if not current_user:
-                return jsonify({"error": "Post not found"}), 404
-            user = User.query.get(current_user)
-            if not user or (not user.is_admin and user.id != post.user_id):
-                return jsonify({"error": "Post not found"}), 404
+        if user and user.is_admin:
+            posts = Post.query.all()
+        else:
+            posts = Post.query.filter_by(is_approved=True).all()
 
-        return jsonify({
+        return jsonify([{
             "id": post.id,
             "title": post.title,
             "content": post.content,
@@ -50,10 +46,11 @@ def get_post(id):
             "created_at": post.created_at.isoformat(),
             "is_approved": post.is_approved,
             "is_flagged": post.is_flagged
-        }), 200
+        } for post in posts]), 200
 
     except Exception as e:
-        return jsonify({"error": f"Failed to fetch post: {str(e)}"}), 500
+        print("Error in get_all_posts:", e)
+        return jsonify({"error": "Failed to fetch posts"}), 500
 
 
 @post_bp.route("/", methods=["POST"])

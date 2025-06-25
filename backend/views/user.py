@@ -3,7 +3,9 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 import os
-from models import db, User
+from models import db, User, Post, Comment, Vote
+from flask import current_app
+
 from .utils import block_check_required
 
 user_bp = Blueprint('user_bp', __name__, url_prefix="/api/users")
@@ -23,6 +25,7 @@ def allowed_file(filename):
 def fetch_all_users():
    
     current_user = User.query.get(get_jwt_identity())
+    
 
     if not current_user or not current_user.is_admin:
         return jsonify({"error": "Admin privileges required"}), 403
@@ -335,3 +338,27 @@ def upload_avatar():
 
     except Exception as e:
         return jsonify({"error": f"Failed to upload avatar: {str(e)}"}), 500
+    
+
+@user_bp.route("/<int:user_id>/stats/", methods=["GET"])
+@jwt_required()
+def get_user_stats(user_id):
+    try:
+        user = User.query.get_or_404(user_id)
+
+        post_count = Post.query.filter_by(user_id=user.id).count()
+        comment_count = Comment.query.filter_by(user_id=user.id).count()
+        vote_count = Vote.query.filter_by(user_id=user.id).count()
+
+        return jsonify({
+            "posts": post_count,
+            "comments": comment_count,
+            "votes": vote_count
+        }), 200
+
+    except Exception as e:
+        current_app.logger.exception("Failed to fetch user stats")
+        return jsonify({"error": "Failed to fetch user stats"}), 500
+
+
+

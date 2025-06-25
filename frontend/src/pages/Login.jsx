@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -10,6 +10,7 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const calledRef = useRef(false); 
 
   const validateForm = () => {
     const newErrors = {};
@@ -45,10 +46,12 @@ const Login = () => {
 
     try {
       const success = await login(formData.email, formData.password);
-      if (success) {
+
+      if (success && !calledRef.current) {
+        calledRef.current = true; 
         toast.success("Login successful!");
-        navigate("/"); 
-      } else {
+        navigate("/");
+      } else if (!success) {
         toast.error("Invalid email or password.");
       }
     } catch (error) {

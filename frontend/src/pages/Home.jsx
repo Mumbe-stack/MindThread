@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const Home = () => {
+  const { user } = useAuth(); 
+
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 px-4">
       <div className="max-w-2xl text-center">
@@ -11,7 +14,7 @@ const Home = () => {
           A modern blogging platform to share ideas, stories, and insights with the world.
         </p>
         <Link
-          to="/posts"
+          to={user ? "/posts" : "/login"} 
           className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-medium px-6 py-3 rounded-md transition duration-200"
         >
           Explore Posts
