@@ -6,37 +6,66 @@ const api_url = import.meta.env.VITE_API_URL || "";
 
 const EditPost = () => {
   const { id } = useParams();
-  const [post, setPost] = useState({ title: "", content: "" });
   const navigate = useNavigate();
+  const [post, setPost] = useState({ title: "", content: "" });
 
+  // ✅ Load the post (only if authorized)
   useEffect(() => {
-    fetch(`${api_url}/api/posts/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch post");
-        return res.json();
-      })
-      .then(setPost)
-      .catch(() => toast.error("Failed to load post"));
-  }, [id]);
+    const fetchPost = async () => {
+      const token = localStorage.getItem("token");
 
+      try {
+        const res = await fetch(`${api_url}/api/posts/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          if (res.status === 403) {
+            toast.error("You are not allowed to edit this post.");
+            navigate("/posts");
+            return;
+          }
+          throw new Error("Failed to fetch post");
+        }
+
+        const data = await res.json();
+        setPost({ title: data.title, content: data.content });
+      } catch (err) {
+        toast.error("Failed to load post.");
+        console.error(err);
+      }
+    };
+
+    fetchPost();
+  }, [id, navigate]);
+
+  // ✅ Update the post
   const handleUpdate = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
-    const res = await fetch(`${api_url}/api/posts/${id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(post)
-    });
+    try {
+      const res = await fetch(`${api_url}/api/posts/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(post),
+      });
 
-    if (res.ok) {
-      toast.success("Post updated successfully");
-      navigate(`/posts/${id}`);
-    } else {
-      toast.error("Failed to update post");
+      if (res.ok) {
+        toast.success("Post updated successfully");
+        navigate(`/posts/${id}`);
+      } else {
+        const error = await res.json();
+        toast.error(error.message || "Failed to update post");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong.");
     }
   };
 
@@ -59,7 +88,10 @@ const EditPost = () => {
           onChange={(e) => setPost({ ...post, content: e.target.value })}
           required
         />
-        <button className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+        <button
+          type="submit"
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+        >
           Save Changes
         </button>
       </form>
