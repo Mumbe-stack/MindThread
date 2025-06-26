@@ -7,17 +7,19 @@ from .utils import block_check_required
 post_bp = Blueprint('post_bp', __name__, url_prefix="/api/posts")
 
 
-@post_bp.route("/", methods=["GET"])
+@post_bp.route("", methods=["GET"])  
 @jwt_required(optional=True)
 def get_all_posts():
+    """Get all posts - Modified for AdminDashboard compatibility"""
     try:
         current_user = get_jwt_identity()
         user = User.query.get(current_user) if current_user else None
 
+        
         if user and user.is_admin:
-            posts = Post.query.all()
+            posts = Post.query.order_by(Post.created_at.desc()).all()
         else:
-            posts = Post.query.filter_by(is_approved=True).all()
+            posts = Post.query.filter_by(is_approved=True).order_by(Post.created_at.desc()).all()
 
         return jsonify([{
             "id": post.id,
@@ -32,7 +34,7 @@ def get_all_posts():
 
     except Exception as e:
         print("Error in get_all_posts:", e)
-        return jsonify({"error": "Failed to fetch posts"}), 500
+        return jsonify({"error": f"Failed to fetch posts: {str(e)}"}), 500
 
 
 @post_bp.route("/<int:id>", methods=["GET"])

@@ -4,5 +4,5 @@ from .user import *
 from .vote import *
 from .home import *
 from .auth import *
-from .admin import *
+from .admin import admin_bp
 

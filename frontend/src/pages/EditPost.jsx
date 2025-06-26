@@ -9,7 +9,7 @@ const EditPost = () => {
   const navigate = useNavigate();
   const [post, setPost] = useState({ title: "", content: "" });
 
-  // ✅ Load the post (only if authorized)
+  // ✅ Fetch the post when component mounts
   useEffect(() => {
     const fetchPost = async () => {
       const token = localStorage.getItem("token");
@@ -23,25 +23,25 @@ const EditPost = () => {
 
         if (!res.ok) {
           if (res.status === 403) {
-            toast.error("You are not allowed to edit this post.");
+            toast.error("You are not authorized to edit this post.");
             navigate("/posts");
             return;
           }
-          throw new Error("Failed to fetch post");
+          throw new Error("Failed to fetch post.");
         }
 
         const data = await res.json();
         setPost({ title: data.title, content: data.content });
       } catch (err) {
-        toast.error("Failed to load post.");
-        console.error(err);
+        console.error("Error loading post:", err);
+        toast.error("Could not load the post.");
       }
     };
 
     fetchPost();
   }, [id, navigate]);
 
-  // ✅ Update the post
+  // ✅ Handle post update
   const handleUpdate = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
@@ -57,21 +57,21 @@ const EditPost = () => {
       });
 
       if (res.ok) {
-        toast.success("Post updated successfully");
+        toast.success("Post updated successfully.");
         navigate(`/posts/${id}`);
       } else {
         const error = await res.json();
-        toast.error(error.message || "Failed to update post");
+        toast.error(error.message || "Failed to update post.");
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Something went wrong.");
+      console.error("Error updating post:", err);
+      toast.error("Something went wrong while updating.");
     }
   };
 
   return (
     <div className="max-w-xl mx-auto p-6 mt-10 bg-white shadow rounded">
-      <h2 className="text-2xl font-bold mb-6">✏️ Edit Post</h2>
+      <h2 className="text-2xl font-bold mb-6 text-indigo-800">✏️ Edit Post</h2>
       <form onSubmit={handleUpdate} className="space-y-4">
         <input
           type="text"
@@ -88,12 +88,21 @@ const EditPost = () => {
           onChange={(e) => setPost({ ...post, content: e.target.value })}
           required
         />
-        <button
-          type="submit"
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-        >
-          Save Changes
-        </button>
+        <div className="flex justify-between">
+          <button
+            type="submit"
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
+            Save Changes
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/posts/${id}`)}
+            className="text-gray-500 hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
       </form>
     </div>
   );

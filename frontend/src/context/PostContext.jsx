@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 
 const PostContext = createContext();
-const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export const usePosts = () => useContext(PostContext);
 
@@ -11,7 +11,7 @@ export const PostProvider = ({ children }) => {
 
   const fetchPosts = async () => {
     try {
-      const res = await fetch(`${api_url}/api/posts/`, {
+      const res = await fetch(`${API_BASE_URL}/api/posts`, {
         method: "GET",
         credentials: "include", 
         headers: {

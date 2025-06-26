@@ -70,6 +70,31 @@ def create_comment():
     }), 201
 
 
+@comment_bp.route("", methods=["GET"])
+@jwt_required()
+def get_all_comments():
+    """Get all comments - Admin Dashboard needs this"""
+    try:
+        current_user = User.query.get(get_jwt_identity())
+        
+       
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin access required"}), 403
+            
+        comments = Comment.query.order_by(Comment.created_at.desc()).all()
+        return jsonify([{
+            "id": c.id,
+            "content": c.content,
+            "post_id": c.post_id,
+            "user_id": c.user_id,
+            "created_at": c.created_at.isoformat(),
+            "is_approved": getattr(c, 'is_approved', True),  
+            "is_flagged": getattr(c, 'is_flagged', False)  
+        } for c in comments]), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch comments: {str(e)}"}), 500
+
 @comment_bp.route("/<int:comment_id>/like/", methods=["POST", "OPTIONS"])
 def like_comment(comment_id):
     if request.method == "OPTIONS":

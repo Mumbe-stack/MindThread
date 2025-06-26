@@ -20,23 +20,14 @@ const SinglePost = () => {
   const fetchPost = async () => {
     try {
       setLoading(true);
-      setError(null);
-
-      const response = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-
-      if (response.status === 404) {
-        setError("Post not found");
-        return;
-      }
-
-      if (!response.ok) throw new Error("Failed to fetch post");
-
-      const data = await response.json();
+      if (!res.ok) throw new Error("Failed to fetch post");
+      const data = await res.json();
       setPost(data);
     } catch (err) {
-      toast.error("Failed to load post");
+      toast.error("Could not load post");
       setError(err.message);
     } finally {
       setLoading(false);
@@ -46,7 +37,6 @@ const SinglePost = () => {
   const fetchComments = async () => {
     try {
       setCommentsLoading(true);
-
       const res = await fetch(`${API_BASE_URL}/api/comments?post_id=${id}`);
       const data = await res.json();
       setComments(Array.isArray(data) ? data : []);
@@ -67,6 +57,59 @@ const SinglePost = () => {
     }
   }, [id]);
 
+  const toggleLikePost = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/posts/${id}/like`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPost((prev) => ({
+          ...prev,
+          likes: data.likes,
+          liked_by: data.liked_by,
+        }));
+      } else {
+        toast.error("Failed to like/unlike post");
+      }
+    } catch {
+      toast.error("Server error while toggling post like");
+    }
+  };
+
+  const toggleLikeComment = async (commentId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/comments/${commentId}/like/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === commentId
+              ? { ...c, likes: data.likes, liked_by: data.liked_by }
+              : c
+          )
+        );
+      } else {
+        toast.error("Failed to like/unlike comment");
+      }
+    } catch {
+      toast.error("Error toggling comment like");
+    }
+  };
+
+  const isPostLiked = () => post?.liked_by?.includes(user?.id);
+  const isCommentLiked = (comment) => comment?.liked_by?.includes(user?.id);
+
   const handleDeletePost = async () => {
     if (!user || post.user_id !== user.id) {
       toast.error("You can only delete your own posts");
@@ -75,74 +118,25 @@ const SinglePost = () => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (response.ok) {
+      if (res.ok) {
         toast.success("Post deleted");
         navigate("/");
       } else {
-        const data = await response.json();
-        toast.error(data.error || "Failed to delete post");
-      }
-    } catch (err) {
-      toast.error("Delete failed");
-    }
-  };
-
-  const toggleLikePost = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/posts/${id}/like`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const updated = await response.json();
-        setPost((prev) => ({ ...prev, likes: updated.likes }));
-      } else {
-        toast.error("Failed to like/unlike post");
+        toast.error("Delete failed");
       }
     } catch {
-      toast.error("Error liking post");
+      toast.error("Server error on delete");
     }
   };
-
-  const toggleLikeComment = async (commentId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/comments/${commentId}/like/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const updated = await response.json();
-        setComments((prev) =>
-          prev.map((c) => (c.id === commentId ? { ...c, likes: updated.likes } : c))
-        );
-      } else {
-        toast.error("Failed to like/unlike comment");
-      }
-    } catch {
-      toast.error("Error liking comment");
-    }
-  };
-
-  const isPostLiked = () => post?.liked_by?.includes(user?.id);
-  const isCommentLiked = (comment) => comment?.liked_by?.includes(user?.id);
 
   const formatDate = (date) =>
     new Date(date).toLocaleString("en-US", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
@@ -154,12 +148,16 @@ const SinglePost = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <Link to="/" className="text-indigo-600 hover:underline mb-4 inline-block">← Back</Link>
+      <Link to="/" className="text-indigo-600 hover:underline mb-4 inline-block">
+        ← Back
+      </Link>
 
       <article className="bg-white border p-6 rounded-lg shadow-sm">
         <header className="mb-4">
           <h1 className="text-3xl font-bold">{post.title}</h1>
-          <p className="text-sm text-gray-500">By User #{post.user_id} • {formatDate(post.created_at)}</p>
+          <p className="text-sm text-gray-500">
+            By User #{post.user_id} • {formatDate(post.created_at)}
+          </p>
         </header>
 
         <p className="mb-4 text-gray-800 whitespace-pre-wrap">{post.content}</p>
@@ -171,7 +169,7 @@ const SinglePost = () => {
               className={`px-3 py-1 rounded ${
                 isPostLiked()
                   ? "bg-red-100 text-red-600 border border-red-300"
-                  : "bg-gray-100 text-gray-600 border"
+                  : "bg-gray-100 text-gray-700 border"
               }`}
             >
               {isPostLiked() ? "♥ Unlike" : "♡ Like"} ({post.likes || 0})
@@ -180,10 +178,16 @@ const SinglePost = () => {
 
           {user?.id === post.user_id && (
             <>
-              <Link to={`/posts/${post.id}/edit`} className="bg-blue-500 text-white px-3 py-1 rounded">
+              <Link
+                to={`/posts/${post.id}/edit`}
+                className="bg-blue-600 text-white px-3 py-1 rounded"
+              >
                 Edit
               </Link>
-              <button onClick={handleDeletePost} className="bg-red-600 text-white px-3 py-1 rounded">
+              <button
+                onClick={handleDeletePost}
+                className="bg-red-600 text-white px-3 py-1 rounded"
+              >
                 Delete
               </button>
             </>
@@ -197,7 +201,9 @@ const SinglePost = () => {
         {user ? (
           <CommentBox postId={post.id} onCommentSubmit={refreshComments} />
         ) : (
-          <p className="text-center text-gray-500">Please <Link to="/login" className="text-indigo-600">log in</Link> to comment</p>
+          <p className="text-center text-gray-500">
+            Please <Link to="/login" className="text-indigo-600">log in</Link> to comment
+          </p>
         )}
 
         <div className="mt-6 space-y-4">

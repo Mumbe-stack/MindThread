@@ -20,13 +20,12 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@user_bp.route("/", methods=["GET"])
+@user_bp.route("", methods=["GET"])  # Change from "/" to ""
 @jwt_required()
 def fetch_all_users():
-   
+    """Get all users - Admin Dashboard needs this"""
     current_user = User.query.get(get_jwt_identity())
     
-
     if not current_user or not current_user.is_admin:
         return jsonify({"error": "Admin privileges required"}), 403
 
@@ -44,7 +43,7 @@ def fetch_all_users():
         } for u in users]), 200
 
     except Exception as e:
-        return jsonify({"error": "Failed to fetch users"}), 500
+        return jsonify({"error": f"Failed to fetch users: {str(e)}"}), 500
 
 
 @user_bp.route("/", methods=["POST"])

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
-import RichTextEditor from '../components/RichTextEditor';
+import RichTextEditor from "../components/RichTextEditor";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const CreatePostForm = ({ onClose }) => {
   const [title, setTitle] = useState("");
@@ -15,21 +17,21 @@ const CreatePostForm = ({ onClose }) => {
       return;
     }
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
-      method: "POST", 
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ title, content })
-    });
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/posts/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title, content }),
+      });
 
       if (res.ok) {
         toast.success("Post created successfully");
         setTitle("");
         setContent("");
-        if (onClose) onClose();
+        if (onClose) onClose(); // if passed, close the modal
       } else {
         const data = await res.json();
         toast.error(data.error || "Failed to create post");
