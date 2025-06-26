@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import CommentBox from "../components/CommentBox";
 import toast from "react-hot-toast";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const VITE_API_URL  = import.meta.env.VITE_API_URL ;
 
 const SinglePost = () => {
   const { id } = useParams();
@@ -37,7 +37,7 @@ const SinglePost = () => {
   const fetchComments = async () => {
     try {
       setCommentsLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/comments?post_id=${id}`);
+      const res = await fetch(`${VITE_API_URL }/api/comments?post_id=${id}`);
       const data = await res.json();
       setComments(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -59,7 +59,7 @@ const SinglePost = () => {
 
   const toggleLikePost = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/posts/${id}/like`, {
+      const res = await fetch(`${VITE_API_URL}/api/posts/${id}/like`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -83,7 +83,7 @@ const SinglePost = () => {
 
   const toggleLikeComment = async (commentId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/comments/${commentId}/like/`, {
+      const res = await fetch(`${VITE_API_URL}/api/comments/${commentId}/like`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -118,7 +118,7 @@ const SinglePost = () => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
+      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

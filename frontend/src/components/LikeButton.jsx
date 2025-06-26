@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const VITE_API_URL = import.meta.env.VITE_API_URL;
 
 const LikeButton = ({ type, id }) => {
   const { token } = useAuth();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [vote, setVote] = useState(null); // 1 = upvote, -1 = downvote
+  const [vote, setVote] = useState(null); 
 
-  // Fetch like count and vote status
+  
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/${type}s/${id}`, {
+        const res = await fetch(`${VITE_API_URL}/api/${type}s/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -22,15 +22,15 @@ const LikeButton = ({ type, id }) => {
         if (res.ok) {
           const data = await res.json();
 
-          // Assuming backend returns `likes` as array of users or count directly
+          
           setLikeCount(data.likes?.length || data.likes || 0);
 
-          // Check if current user liked
+         
           if (data.liked_by?.some((u) => u.id === user.id)) {
             setLiked(true);
           }
 
-          // If the backend returns vote info, set it here too
+         
           if (data.user_vote === 1) setVote(1);
           else if (data.user_vote === -1) setVote(-1);
         }
@@ -44,7 +44,7 @@ const LikeButton = ({ type, id }) => {
 
   const toggleLike = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/${type}s/${id}/like`, {
+      const res = await fetch(`${VITE_API_URL}/api/${type}s/${id}/like`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -64,7 +64,7 @@ const LikeButton = ({ type, id }) => {
 
   const castVote = async (value) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/votes/${type}`, {
+      const res = await fetch(`${VITE_API_URL}/api/votes/${type}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

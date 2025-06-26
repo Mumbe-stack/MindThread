@@ -13,7 +13,7 @@ const CreateUserForm = ({ onClose }) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
-    const res = await fetch("/api/users", {
+    const res = await fetch(`${VITE_API_URL}/api/users`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

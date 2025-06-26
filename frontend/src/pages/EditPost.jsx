@@ -2,20 +2,20 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-const api_url = import.meta.env.VITE_API_URL || "";
+const VITE_API_URL = import.meta.env.VITE_API_URL || "";
 
 const EditPost = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [post, setPost] = useState({ title: "", content: "" });
 
-  // ✅ Fetch the post when component mounts
+  
   useEffect(() => {
     const fetchPost = async () => {
       const token = localStorage.getItem("token");
 
       try {
-        const res = await fetch(`${api_url}/api/posts/${id}`, {
+        const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -41,13 +41,13 @@ const EditPost = () => {
     fetchPost();
   }, [id, navigate]);
 
-  // ✅ Handle post update
+  
   const handleUpdate = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
     try {
-      const res = await fetch(`${api_url}/api/posts/${id}`, {
+      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

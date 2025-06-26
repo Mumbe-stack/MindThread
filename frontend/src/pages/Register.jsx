@@ -28,8 +28,8 @@ const Register = () => {
     
     if (!form.password) {
       newErrors.password = "Password is required";
-    } else if (form.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (form.password.length < 4) {
+      newErrors.password = "Password must be at least 4 characters";
     }
     
     setErrors(newErrors);

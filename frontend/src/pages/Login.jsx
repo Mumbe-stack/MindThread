@@ -12,7 +12,7 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const calledRef = useRef(false); // Prevent double navigation
+  const calledRef = useRef(false); 
 
   const validateForm = () => {
     const newErrors = {};
@@ -113,7 +113,7 @@ const Login = () => {
       </form>
 
       <p className="text-center text-sm text-gray-600 mt-4">
-        Don’t have an account?{" "}
+        You don’t have an account?{" "}
         <Link to="/register" className="text-blue-600 hover:underline">
           Register here
         </Link>

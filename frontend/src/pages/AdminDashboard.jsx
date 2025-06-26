@@ -18,15 +18,15 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-// ✅ FIXED: Add proper API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
   
-  // Overview data
+  
   const [stats, setStats] = useState({ 
     users: 0, 
     posts: 0, 
@@ -38,27 +38,27 @@ const AdminDashboard = () => {
   });
   const [chartData, setChartData] = useState(null);
   
-  // Users management
+  
   const [users, setUsers] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   
-  // Content management
+  
   const [flaggedComments, setFlaggedComments] = useState([]);
   const [flaggedPosts, setFlaggedPosts] = useState([]);
   const [allPosts, setAllPosts] = useState([]);
   const [allComments, setAllComments] = useState([]);
   const [contentSearchTerm, setContentSearchTerm] = useState("");
   
-  // Modals
+  
   const [selectedPost, setSelectedPost] = useState(null);
   const [selectedComment, setSelectedComment] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
-  // ✅ FIXED: Better error handling for API responses
+  
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
       if (response.status === 404) {
@@ -101,7 +101,7 @@ const AdminDashboard = () => {
     }
   }, [activeTab]);
 
-  // Debounced user search
+  
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
       if (userSearchTerm.trim().length > 0) {
@@ -118,11 +118,11 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       console.log("Fetching overview data...");
-      console.log("API Base URL:", API_BASE_URL);
+      console.log("API Base URL:", VITE_API_URL);
       console.log("Token exists:", !!token);
 
-      // ✅ FIXED: Proper API URLs and error handling
-      const statsResponse = await fetch(`${API_BASE_URL}/api/admin/stats`, { 
+     
+      const statsResponse = await fetch(`${VITE_API_URL}/api/admin/stats`, { 
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -135,9 +135,9 @@ const AdminDashboard = () => {
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       setStats(statsData);
 
-      // Try to fetch trends, but don't fail if it doesn't exist
+      
       try {
-        const trendsResponse = await fetch(`${API_BASE_URL}/api/admin/activity-trends`, { 
+        const trendsResponse = await fetch(`${VITE_API_URL}/api/admin/activity-trends`, { 
           headers: { 
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
@@ -205,7 +205,7 @@ const AdminDashboard = () => {
   const fetchAllUsers = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`, { 
+      const response = await fetch(`${VITE_API_URL}/api/users`, { 
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -227,7 +227,7 @@ const AdminDashboard = () => {
     
     setSearchingUsers(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`, {
+      const response = await fetch(`${VITE_API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -238,7 +238,7 @@ const AdminDashboard = () => {
       setUserSearchResults(data);
     } catch (err) {
       console.error("User search error:", err);
-      // Fall back to local filtering if search endpoint doesn't exist
+      
       const filtered = users.filter(u => 
         u.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
         u.email.toLowerCase().includes(userSearchTerm.toLowerCase())
@@ -253,13 +253,13 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       const [postsRes, commentsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/posts`, { 
+        fetch(`${VITE_API_URL}/api/posts`, { 
           headers: { 
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
           } 
         }),
-        fetch(`${API_BASE_URL}/api/comments`, { 
+        fetch(`${VITE_API_URL}/api/comments`, { 
           headers: { 
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
@@ -285,12 +285,12 @@ const AdminDashboard = () => {
   const fetchFlaggedContent = async () => {
     setLoading(true);
     try {
-      // Try to fetch flagged content, but provide fallbacks
+      
       let flaggedPostsData = [];
       let flaggedCommentsData = [];
 
       try {
-        const postsRes = await fetch(`${API_BASE_URL}/api/admin/flagged/posts`, { 
+        const postsRes = await fetch(`${VITE_API_URL}/api/admin/flagged/posts`, { 
           headers: { 
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
@@ -304,7 +304,7 @@ const AdminDashboard = () => {
       }
 
       try {
-        const commentsRes = await fetch(`${API_BASE_URL}/api/admin/flagged/comments`, { 
+        const commentsRes = await fetch(`${VITE_API_URL}/api/admin/flagged/comments`, { 
           headers: { 
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
@@ -336,21 +336,21 @@ const AdminDashboard = () => {
       switch (action) {
         case "block":
         case "unblock":
-          endpoint = `${API_BASE_URL}/api/users/${userId}/block`;
+          endpoint = `${VITE_API_URL}/api/users/${userId}/block`;
           break;
         case "delete":
           if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
             return;
           }
-          endpoint = `${API_BASE_URL}/api/users/${userId}`;
+          endpoint = `${VITE_API_URL}/api/users/${userId}`;
           method = "DELETE";
           break;
         case "make_admin":
-          endpoint = `${API_BASE_URL}/api/users/${userId}`;
+          endpoint = `${VITE_API_URL}/api/users/${userId}`;
           body = JSON.stringify({ is_admin: true });
           break;
         case "remove_admin":
-          endpoint = `${API_BASE_URL}/api/users/${userId}`;
+          endpoint = `${VITE_API_URL}/api/users/${userId}`;
           body = JSON.stringify({ is_admin: false });
           break;
       }
@@ -382,21 +382,21 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "approve":
-          endpoint = `${API_BASE_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${API_BASE_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          endpoint = `${API_BASE_URL}/api/${type}s/${id}/flag`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
             return;
           }
-          endpoint = `${API_BASE_URL}/api/${type}s/${id}`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}`;
           method = "DELETE";
           break;
       }
@@ -468,7 +468,7 @@ const AdminDashboard = () => {
         <p className="text-gray-600">Manage users, content, and monitor platform activity</p>
         {/* Debug info */}
         <div className="text-xs text-gray-400 mt-2">
-          API: {API_BASE_URL} | User: {user.username} | Admin: {user.is_admin ? "Yes" : "No"}
+          API: {VITE_API_URL} | User: {user.username} | Admin: {user.is_admin ? "Yes" : "No"}
         </div>
       </div>
 
@@ -601,10 +601,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Rest of the component remains the same... */}
-      {/* The Users, Content, and Flagged tabs would continue here with the same structure as before */}
       
-      {/* For now, showing a simple message for other tabs */}
       {activeTab !== "overview" && (
         <div className="text-center py-12">
           <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -649,11 +646,11 @@ const AdminDashboard = () => {
         </Modal>
       )}
 
-      {/* Debug Panel (remove in production) */}
+    
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm">
           <h4 className="font-bold mb-2">Debug Info</h4>
-          <div>API Base URL: {API_BASE_URL}</div>
+          <div>API Base URL: {VITE_API_URL}</div>
           <div>User: {user?.username}</div>
           <div>Is Admin: {user?.is_admin ? "Yes" : "No"}</div>
           <div>Token: {token ? "Present" : "Missing"}</div>

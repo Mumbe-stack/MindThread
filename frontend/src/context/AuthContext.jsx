@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
-const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const api_url = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -11,32 +11,33 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (token) fetchCurrentUser();
+    if (token) {
+      fetchCurrentUser();
+    }
   }, [token]);
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch(`${api_url}/users/me`, {
+      const res = await fetch(`${api_url}/api/users/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setUser({
-          id: data.id,
-          username: data.username,
-          email: data.email,
-          is_admin: data.is_admin,
-          created_at: data.created_at,
-        });
-      } else {
-        handleUnauth();
-      }
-    } catch {
-      toast.error("Failed to fetch user data");
+      if (!res.ok) throw new Error("Unauthorized");
+
+      const data = await res.json();
+      setUser({
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        is_admin: data.is_admin,
+        created_at: data.created_at,
+      });
+    } catch (err) {
+      console.error("Fetch user error:", err);
       handleUnauth();
+      toast.error("Session expired. Please login again.");
     }
   };
 
@@ -48,30 +49,32 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const res = await fetch(`${api_url}/auth/login`, {
+      const res = await fetch(`${api_url}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
+        credentials: "include", // only if using cookies
         body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
 
-      if (res.ok) {
-        localStorage.setItem("token", data.access_token);
-        setToken(data.access_token);
-        setUser({
-          id: data.user_id,
-          username: data.username,
-          is_admin: data.is_admin,
-        });
-        return true;
-      } else {
+      if (!res.ok) {
+        console.warn("Login failed:", data);
         toast.error(data.error || "Invalid credentials");
         return false;
       }
+
+      localStorage.setItem("token", data.access_token);
+      setToken(data.access_token);
+      setUser({
+        id: data.user_id,
+        username: data.username,
+        is_admin: data.is_admin,
+      });
+      toast.success("Logged in successfully");
+      return true;
     } catch (err) {
       console.error("Login error:", err);
       toast.error("Network error during login");
@@ -81,7 +84,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (form) => {
     try {
-      const res = await fetch(`${api_url}/auth/register`, {
+      const res = await fetch(`${api_url}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -91,33 +94,29 @@ export const AuthProvider = ({ children }) => {
 
       const data = await res.json();
 
-      if (res.ok) {
-        toast.success("Account created successfully");
-        navigate("/login");
-      } else {
+      if (!res.ok) {
         toast.error(data.error || "Registration failed");
+        return;
       }
-    } catch {
+
+      toast.success("Account created successfully");
+      navigate("/login");
+    } catch (err) {
       toast.error("Network error during registration");
     }
   };
 
   const logout = async () => {
     try {
-      const res = await fetch(`${api_url}/auth/logout`, {
+      await fetch(`${api_url}/api/auth/logout`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-
-      if (res.ok) {
-        toast.success("Logged out successfully");
-      } else {
-        toast.error("Logout failed");
-      }
+      toast.success("Logged out successfully");
     } catch {
-      toast.error("Network error during logout");
+      toast.error("Logout failed");
     } finally {
       handleUnauth();
       navigate("/");
@@ -126,7 +125,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (updates) => {
     try {
-      const res = await fetch(`${api_url}/users/${user.id}`, {
+      const res = await fetch(`${api_url}/api/users/${user.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -148,7 +147,7 @@ export const AuthProvider = ({ children }) => {
 
   const deleteUser = async () => {
     try {
-      const res = await fetch(`${api_url}/users/${user.id}`, {
+      const res = await fetch(`${api_url}/api/users/${user.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -168,13 +167,13 @@ export const AuthProvider = ({ children }) => {
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch(`${api_url}/users/`, {
+      const res = await fetch(`${api_url}/api/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!res.ok) throw new Error("Failed to fetch users");
+      if (!res.ok) throw new Error("Fetch failed");
       return await res.json();
     } catch {
       toast.error("Unable to fetch users");

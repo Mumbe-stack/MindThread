@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_URL ;
 
 const AddPost = () => {
   const [title, setTitle] = useState("");
@@ -41,7 +41,7 @@ const AddPost = () => {
         ...(tags.trim() && { tags: tags.trim() })
       };
 
-      const res = await fetch(`${API_BASE_URL}/api/posts`, {
+      const res = await fetch(`${VITE_API_URL}/api/posts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

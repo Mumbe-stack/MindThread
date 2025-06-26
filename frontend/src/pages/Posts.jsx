@@ -1,26 +1,74 @@
-// src/pages/Posts.jsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import LikeButton from "../components/LikeButton"; // ✅ Make sure this path is correct
+import LikeButton from "../components/LikeButton";
+
+// Ensure correct API base URL
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
 
 const Posts = () => {
   const [posts, setPosts] = useState([]);
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const [error, setError] = useState("");
+
+  // Reusable fetch function that returns valid JSON or throws
+  const fetchPosts = async () => {
+    const token = localStorage.getItem("token");
+
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    try {
+      const res = await fetch(`${VITE_API_URL}/api/posts`, {
+        method: "GET",
+        credentials: "include",
+        headers,
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!res.ok) {
+        const raw = await res.text();
+        console.error("❌ Non-200 response:", res.status, raw.slice(0, 100));
+        throw new Error(`HTTP ${res.status}: ${raw}`);
+      }
+
+      if (!contentType.includes("application/json")) {
+       const raw = await res.text();
+        throw new Error(`Expected JSON but received: ${raw.slice(0, 100)}`);
+    }
+
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error("❌ Fetch error:", err.message);
+      throw err;
+    }
+  };
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/posts`)
-      .then((res) => res.json())
-      .then(setPosts)
-      .catch((err) => console.error("Failed to load posts", err));
-  }, [API_BASE_URL]);
+    fetchPosts()
+      .then((data) => {
+        console.log("✅ Posts loaded:", data.length);
+        setPosts(data);
+        setError("");
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to fetch posts");
+        setPosts([]);
+      });
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6 text-center text-indigo-800">
-        All Posts
-      </h1>
+      <h1 className="text-3xl font-bold mb-6 text-center text-indigo-800">All Posts</h1>
 
-      {posts.length === 0 ? (
+      {error && (
+        <p className="text-red-600 text-center font-medium mb-4">{error}</p>
+      )}
+
+      {posts.length === 0 && !error ? (
         <p className="text-gray-500 text-center">No posts available.</p>
       ) : (
         <div className="grid gap-4">
@@ -43,8 +91,6 @@ const Posts = () => {
                   By User #{post.user_id} •{" "}
                   {new Date(post.created_at).toLocaleDateString()}
                 </p>
-
-                {/* Like button for each post */}
                 <LikeButton type="post" id={post.id} />
               </div>
             </div>

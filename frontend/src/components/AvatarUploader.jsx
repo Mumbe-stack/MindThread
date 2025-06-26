@@ -13,7 +13,7 @@ const AvatarUploader = () => {
     const formData = new FormData();
     formData.append("avatar", file);
 
-    const res = await fetch("/api/users/upload-avatar", {
+    const res = await fetch(`${VITE_API_URL}/api/users/upload-avatar`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${localStorage.getItem("token")}`,

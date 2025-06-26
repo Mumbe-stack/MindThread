@@ -8,7 +8,7 @@ const CommentBox = ({ postId, onCommentSubmit }) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
-    const res = await fetch("/api/comments/", {
+    const res = await fetch(`${VITE_API_URL}/api/comments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

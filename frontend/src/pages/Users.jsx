@@ -5,7 +5,7 @@ const Users = () => {
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    fetch("/api/users", {
+    fetch(`${VITE_API_URL}/api/users`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
       .then((res) => res.json())
@@ -15,7 +15,7 @@ const Users = () => {
 
   const toggleBlock = async (id, block) => {
     try {
-      await fetch(`/api/users/${id}/${block ? "block" : "unblock"}`, {
+      await fetch(`${VITE_API_URL}/api/users/${id}/${block ? "block" : "unblock"}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
