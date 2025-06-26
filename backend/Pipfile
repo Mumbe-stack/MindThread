@@ -12,6 +12,8 @@ flask-mail = "*"
 python-dotenv = "*"
 flask-cors = "*"
 cors = "*"
+psycopg2-binary = "*"
+gunicorn = "*"
 
 [dev-packages]
 
