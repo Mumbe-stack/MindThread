@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 
 const PostContext = createContext();
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const VITE_API_URL = import.meta.env.VITE_API_URL;
 
 export const usePosts = () => useContext(PostContext);
 
@@ -11,15 +11,16 @@ export const PostProvider = ({ children }) => {
 
   const fetchPosts = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/posts`, {
+      const res = await fetch(`${VITE_API_URL}/api/posts`, {
         method: "GET",
-        credentials: "include", 
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
       });
 
       const contentType = res.headers.get("content-type") || "";
+
       if (!res.ok || !contentType.includes("application/json")) {
         throw new Error("API did not return valid JSON");
       }
