@@ -12,11 +12,12 @@ from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp, admin
 app = Flask(__name__)
 
 
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "https://your-frontend-domain.com"]}}, supports_credentials=True)
+CORS(app, resources={
+     r"/api/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
 
 # Database Configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://mindthread_db_user:llNJ1LIPIhbY3ns5L7gEASSoUM2jkllX@dpg-d1ec07ili9vc739sqs3g-a.oregon-postgres.render.com/mindthread_db"
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://mindthread_db_user:llNJ1LIPIhbY3ns5L7gEASSoUM2jkllX@dpg-d1ec07ili9vc739sqs3g-a.oregon-postgres.render.com/mindthread_db?sslmode=require"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # JWT Configuration

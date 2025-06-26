@@ -181,6 +181,19 @@ def refresh_token():
         current_app.logger.error(f"Token refresh error: {e}")
         return jsonify({"error": "Token refresh failed"}), 500
 
+@auth_bp.route("/me", methods=["GET"])
+@jwt_required()
+def me():
+    current_user_id = get_jwt_identity()
+    user = User.query.get_or_404(current_user_id)
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat()
+    }), 200
+
 
 @auth_bp.route("/change-password", methods=["POST"])
 @jwt_required()

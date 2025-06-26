@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -8,11 +8,15 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/";
-
+  
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const calledRef = useRef(false); 
+  const calledRef = useRef(false);
+
+  useEffect(() => {
+    calledRef.current = false;
+  }, [formData.email, formData.password]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -49,16 +53,20 @@ const Login = () => {
     try {
       const success = await login(formData.email, formData.password);
 
-      if (success && !calledRef.current) {
-        calledRef.current = true;
-        toast.success("Login successful!");
-        navigate(from);
-      } else if (!success) {
-        toast.error("Invalid email or password.");
+      if (success) {
+        if (!calledRef.current) {
+          calledRef.current = true;
+          toast.success("Login successful!");
+          navigate(from, { replace: true });
+        }
+      } else {
+        calledRef.current = false;
+        toast.error("Invalid email or password");
       }
-    } catch (error) {
-      console.error("Login error:", error);
-      toast.error("Something went wrong. Please try again.");
+    } catch (err) {
+      calledRef.current = false;
+      console.error("Login error:", err);
+      toast.error("Network error. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -77,9 +85,11 @@ const Login = () => {
             className={`w-full p-2 border rounded ${
               errors.email ? "border-red-500" : "border-gray-300"
             }`}
+            aria-invalid={!!errors.email}
             value={formData.email}
             onChange={handleChange}
             disabled={isLoading}
+            autoComplete="username"
           />
           {errors.email && (
             <p className="text-red-500 text-sm mt-1">{errors.email}</p>
@@ -94,9 +104,11 @@ const Login = () => {
             className={`w-full p-2 border rounded ${
               errors.password ? "border-red-500" : "border-gray-300"
             }`}
+            aria-invalid={!!errors.password}
             value={formData.password}
             onChange={handleChange}
             disabled={isLoading}
+            autoComplete="current-password"
           />
           {errors.password && (
             <p className="text-red-500 text-sm mt-1">{errors.password}</p>
@@ -106,14 +118,14 @@ const Login = () => {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           {isLoading ? "Signing in..." : "Login"}
         </button>
       </form>
 
       <p className="text-center text-sm text-gray-600 mt-4">
-        You don’t have an account?{" "}
+        Don’t have an account?{" "}
         <Link to="/register" className="text-blue-600 hover:underline">
           Register here
         </Link>

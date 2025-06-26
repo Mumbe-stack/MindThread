@@ -1,29 +1,32 @@
-from models import User, db
+# seed.py
 from app import app
+from models import db, User, Post
 from werkzeug.security import generate_password_hash
+from datetime import datetime
 
+with app.app_context():
+    db.drop_all()
+    db.create_all()
 
-def seed():
-    with app.app_context():
-        username = "Admin"
+    # Create admin user
+    admin = User(
+        username="admin",
+        email="administrator@example.com",
+        password_hash=generate_password_hash("admin123"),
+        is_admin=True,
+    )
+    db.session.add(admin)
 
-        email = "administrator@gexample.com"
-        password = "admin"
+    # Create sample post
+    post = Post(
+        title="Welcome to MindThread!",
+        content="This is your first post.",
+        tags="intro,announcement",
+        created_at=datetime.utcnow(),
+        user_id=1,
+        is_approved=True
+    )
+    db.session.add(post)
 
-        username_exists = User.query.filter_by(username=username).first()
-        if username_exists:
-            print("Username already exists.")
-            return
-
-        email_exists = User.query.filter_by(email=email).first()
-        if email_exists:
-            print("Email already exists.")
-            return
-        new_admin = User(username=username, email=email,
-                         password=generate_password_hash(password), is_admin=True)
-        db.session.add(new_admin)
-        db.session.commit()
-        print("Admin added  successfully.")
-
-
-seed()
+    db.session.commit()
+    print("✅ Database seeded successfully.")

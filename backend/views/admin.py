@@ -55,3 +55,9 @@ def get_flagged_posts():
 def get_flagged_comments():
     comments = Comment.query.filter_by(is_flagged=True).all()
     return jsonify([comment.to_dict() for comment in comments]), 200
+
+
+@admin_bp.route("/admin/stats")
+@jwt_required()
+def admin_stats():
+    return jsonify({"message": "Admin stats OK"}), 200
