@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { Toaster } from "react-hot-toast";
-
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Posts from "./pages/Posts";
@@ -17,13 +16,13 @@ import NotFound from "./pages/NotFound";
 
 function App() {
   const { user } = useAuth();
-
+  
   if (user === undefined) {
     return <div className="p-10 text-center">Loading...</div>;
   }
-
+  
   const isAdmin = user?.is_admin;
-
+  
   return (
     <>
       <Toaster position="top-right" reverseOrder={false} />
@@ -39,7 +38,13 @@ function App() {
           <Route path="/posts/new" element={user ? <AddPost /> : <Navigate to="/login" />} />
           <Route path="/posts/:id" element={<SinglePost />} />
           <Route path="/posts/:id/edit" element={user ? <EditPost /> : <Navigate to="/login" />} />
-          <Route path="*" element={<NotFound />} />
+          
+          {/* Handle 404s - Show NotFound component for invalid routes, but don't break SPA routing */}
+          <Route path="/404" element={<NotFound />} />
+          
+          {/* Catch-all route: redirect unknown routes to home instead of showing 404 */}
+          {/* This prevents Netlify 404s and lets React Router handle routing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </>

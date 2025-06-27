@@ -10,14 +10,14 @@ from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp, admin
 
 app = Flask(__name__)
 
-# Enhanced CORS Configuration - FIXED
+
 CORS(app, resources={
     r"/api/*": {
         "origins": [
             "http://localhost:5173",
             "http://localhost:3000",
             "http://127.0.0.1:5173", 
-            "https://mindthread-1.onrender.com",  # Fixed: Added missing comma
+            "https://mindthread-1.onrender.com",  
             "https://mindthreadbloggingapp.netlify.app"
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -27,12 +27,12 @@ CORS(app, resources={
     }
 })
 
-# Database Configuration
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://mindthread_db_56lm_user:Kdjo6KFm6y4jsU3TFEZJ5hcgBF7g8fAC@dpg-d1evccfgi27c7384mvc0-a.oregon-postgres.render.com/mindthread_db_56lm"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# JWT Configuration
+
 app.config["JWT_SECRET_KEY"] = "jwt_secre542cc4f32fc0a619979df2b56083fb21c97ea4c9e0e2b7d25779734357a1810486ef0c480c8fb9da1990c602dbf1438b9b6f3fa72716b13baf28612496d8fcd8t_key"
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=48)
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
@@ -40,7 +40,7 @@ app.config["JWT_BLACKLIST_ENABLED"] = True
 app.config["JWT_BLACKLIST_TOKEN_CHECKS"] = ["access"]
 app.config["JWT_VERIFY_SUB"] = False
 
-# Mail Configuration
+
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
