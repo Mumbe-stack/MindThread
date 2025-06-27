@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from models import db, User, Post, Comment, Vote
 
 # Import utils if available, otherwise define a simple decorator
@@ -697,16 +697,55 @@ def search_users():
         current_app.logger.error(f"Failed to search users: {e}")
         return jsonify({"error": "Failed to search users"}), 500
 
+@user_bp.route("/users/<int:user_id>/stats", methods=["GET"])
+@jwt_required()
+def get_user_stats_by_id(user_id):
+    """Get individual user statistics"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        # Check permissions - user can view their own stats or admin can view any
+        if current_user_id != user_id and (not current_user or not current_user.is_admin):
+            return jsonify({"error": "Access denied"}), 403
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Get user statistics
+        try:
+            posts_count = user.posts.count() if hasattr(user, 'posts') else 0
+            comments_count = user.comments.count() if hasattr(user, 'comments') else 0
+            votes_count = user.votes.count() if hasattr(user, 'votes') else 0
+        except Exception as e:
+            current_app.logger.warning(f"Error counting user stats for user {user_id}: {e}")
+            posts_count = comments_count = votes_count = 0
+
+        return jsonify({
+            "posts": posts_count,
+            "comments": comments_count,
+            "votes": votes_count,
+            "user_id": user.id,
+            "username": user.username
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch user stats for user {user_id}: {e}")
+        return jsonify({"error": "Failed to fetch user statistics"}), 500
+
 @user_bp.route("/users/stats", methods=["GET"])
 @jwt_required()
-def get_user_stats():
-    """Get user statistics (admin only)"""
+def get_global_user_stats():
+    """Get global user statistics (admin only)"""
     try:
         current_user = User.query.get(get_jwt_identity())
         
         if not current_user or not current_user.is_admin:
             return jsonify({"error": "Admin privileges required"}), 403
 
+        from datetime import timedelta
+        
         total_users = User.query.count()
         active_users = User.query.filter(User.is_active == True).count()
         blocked_users = User.query.filter(User.is_blocked == True).count()
