@@ -1,469 +1,9 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
-const api_url = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
-  const navigate = useNavigate();
-
-  // Initialize authentication state from localStorage
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const storedToken = localStorage.getItem("access_token");
-        const storedRefreshToken = localStorage.getItem("refresh_token");
-        const storedUser = localStorage.getItem("user");
-
-        if (storedToken) {
-          setToken(storedToken);
-          setRefreshToken(storedRefreshToken);
-          
-          if (storedUser) {
-            try {
-              const parsedUser = JSON.parse(storedUser);
-              setUser(parsedUser);
-            } catch (parseError) {
-              console.error("Error parsing stored user:", parseError);
-              localStorage.removeItem("user");
-            }
-          }
-          
-          // Verify token validity
-          await verifyCurrentUser(storedToken);
-        }
-      } catch (error) {
-        console.error("Auth initialization error:", error);
-        clearAuthData();
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-  }, []);
-
-  const clearAuthData = () => {
-    setUser(null);
-    setToken(null);
-    setRefreshToken(null);
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("user");
-  };
-
-  const storeAuthData = (authData) => {
-    const { access_token, refresh_token, user: userData } = authData;
-    
-    setToken(access_token);
-    setUser(userData);
-    
-    localStorage.setItem("access_token", access_token);
-    localStorage.setItem("user", JSON.stringify(userData));
-    
-    if (refresh_token) {
-      setRefreshToken(refresh_token);
-      localStorage.setItem("refresh_token", refresh_token);
-    }
-  };
-
-  const refreshAccessToken = async () => {
-    try {
-      const storedRefreshToken = localStorage.getItem("refresh_token");
-      if (!storedRefreshToken) {
-        throw new Error("No refresh token available");
-      }
-
-      const res = await fetch(`${api_url}/api/auth/refresh`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${storedRefreshToken}`,
-        },
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        throw new Error("Token refresh failed");
-      }
-
-      const data = await res.json();
-      
-      if (data.success && data.access_token) {
-        setToken(data.access_token);
-        localStorage.setItem("access_token", data.access_token);
-        return data.access_token;
-      } else {
-        throw new Error("Invalid refresh response");
-      }
-    } catch (error) {
-      console.error("Token refresh error:", error);
-      clearAuthData();
-      toast.error("Session expired. Please login again.");
-      navigate("/login");
-      throw error;
-    }
-  };
-
-  const verifyCurrentUser = async (tokenToVerify = token) => {
-    if (!tokenToVerify) return false;
-
-    try {
-      const res = await fetch(`${api_url}/api/auth/me`, {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${tokenToVerify}`,
-        },
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.user) {
-          setUser(data.user);
-          localStorage.setItem("user", JSON.stringify(data.user));
-          return true;
-        }
-      } else if (res.status === 401) {
-        // Token expired, try to refresh
-        try {
-          const newToken = await refreshAccessToken();
-          return await verifyCurrentUser(newToken);
-        } catch (refreshError) {
-          return false;
-        }
-      }
-      
-      return false;
-    } catch (error) {
-      console.error("User verification error:", error);
-      return false;
-    }
-  };
-
-  const login = async (credentials) => {
-    try {
-      const res = await fetch(`${api_url}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(credentials),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        // Handle both old and new response formats
-        const userData = data.user || {
-          id: data.user_id,
-          username: data.username,
-          email: data.email,
-          is_admin: data.is_admin,
-        };
-
-        storeAuthData({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          user: userData
-        });
-
-        toast.success("Login successful!");
-        navigate("/");
-        return { success: true, user: userData };
-      } else {
-        // Handle specific error cases
-        let errorMessage = "Login failed";
-        
-        if (res.status === 401) {
-          errorMessage = data.error || "Invalid credentials";
-        } else if (res.status === 403) {
-          errorMessage = data.error || "Account is blocked or inactive";
-        } else if (res.status === 400) {
-          errorMessage = data.error || "Invalid input data";
-        } else {
-          errorMessage = data.error || "Login failed";
-        }
-        
-        toast.error(errorMessage);
-        return { success: false, error: errorMessage };
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      const errorMessage = "Network error during login";
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const register = async (userData) => {
-    try {
-      const res = await fetch(`${api_url}/api/auth/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(userData),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        // Handle auto-login after registration if tokens are provided
-        if (data.access_token) {
-          const newUser = data.user || {
-            id: data.user_id,
-            username: userData.username,
-            email: userData.email,
-            is_admin: false,
-          };
-
-          storeAuthData({
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-            user: newUser
-          });
-
-          toast.success("Registration successful! You are now logged in.");
-          navigate("/");
-        } else {
-          toast.success("Account created successfully! Please login.");
-          navigate("/login");
-        }
-        
-        return { success: true };
-      } else {
-        // Handle specific error cases
-        let errorMessage = "Registration failed";
-        
-        if (res.status === 409) {
-          errorMessage = data.error || "User already exists";
-        } else if (res.status === 400) {
-          errorMessage = data.error || "Invalid input data";
-        } else {
-          errorMessage = data.error || "Registration failed";
-        }
-        
-        toast.error(errorMessage);
-        return { success: false, error: errorMessage };
-      }
-    } catch (error) {
-      console.error("Registration error:", error);
-      const errorMessage = "Network error during registration";
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      // Call logout endpoint if token exists
-      if (token) {
-        await fetch(`${api_url}/api/auth/logout`, {
-          method: "POST", // Changed from DELETE to POST to match backend
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-          },
-          credentials: "include",
-        });
-      }
-    } catch (error) {
-      console.error("Logout API error:", error);
-      // Continue with local logout even if API call fails
-    } finally {
-      clearAuthData();
-      toast.success("Logged out successfully");
-      navigate("/");
-    }
-  };
-
-  const updateProfile = async (updates) => {
-    try {
-      const res = await fetch(`${api_url}/api/users/${user.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        credentials: "include",
-        body: JSON.stringify(updates),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success("Profile updated successfully");
-        
-        // Refresh user data
-        await verifyCurrentUser();
-        return { success: true, data };
-      } else {
-        const errorData = await res.json();
-        const errorMessage = errorData.error || "Update failed";
-        toast.error(errorMessage);
-        return { success: false, error: errorMessage };
-      }
-    } catch (error) {
-      console.error("Update profile error:", error);
-      const errorMessage = "Error updating profile";
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const deleteUser = async () => {
-    try {
-      const res = await fetch(`${api_url}/api/users/me`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        toast.success("Account deleted successfully");
-        clearAuthData();
-        navigate("/");
-        return { success: true };
-      } else {
-        const errorData = await res.json();
-        const errorMessage = errorData.error || "Failed to delete account";
-        toast.error(errorMessage);
-        return { success: false, error: errorMessage };
-      }
-    } catch (error) {
-      console.error("Delete user error:", error);
-      const errorMessage = "Error deleting account";
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  const fetchAllUsers = async () => {
-    try {
-      const res = await fetch(`${api_url}/api/users`, {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          // Try to refresh token
-          try {
-            const newToken = await refreshAccessToken();
-            const retryRes = await fetch(`${api_url}/api/users`, {
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${newToken}`,
-              },
-              credentials: "include",
-            });
-            
-            if (retryRes.ok) {
-              return await retryRes.json();
-            }
-          } catch (refreshError) {
-            throw new Error("Authentication failed");
-          }
-        }
-        
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to fetch users");
-      }
-
-      return await res.json();
-    } catch (error) {
-      console.error("Fetch users error:", error);
-      toast.error("Unable to fetch users");
-      return [];
-    }
-  };
-
-  // Enhanced API request helper with automatic token refresh
-  const authenticatedRequest = async (url, options = {}) => {
-    const makeRequest = async (tokenToUse) => {
-      return fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${tokenToUse}`,
-          ...options.headers,
-        },
-        credentials: "include",
-      });
-    };
-
-    try {
-      let response = await makeRequest(token);
-
-      // If unauthorized, try to refresh token
-      if (response.status === 401 && refreshToken) {
-        try {
-          const newToken = await refreshAccessToken();
-          response = await makeRequest(newToken);
-        } catch (refreshError) {
-          clearAuthData();
-          navigate("/login");
-          throw new Error("Session expired. Please login again.");
-        }
-      }
-
-      return response;
-    } catch (error) {
-      console.error("Authenticated request error:", error);
-      throw error;
-    }
-  };
-
-  const refreshUser = async () => {
-    if (token) {
-      await verifyCurrentUser();
-    }
-  };
-
-  // Check if user is authenticated
-  const isAuthenticated = Boolean(token && user);
-  const isAdmin = Boolean(user?.is_admin);
-  const isBlocked = Boolean(user?.is_blocked);
-
-  const value = {
-    user,
-    token,
-    refreshToken,
-    loading,
-    isAuthenticated,
-    isAdmin,
-    isBlocked,
-    login,
-    register,
-    logout,
-    updateProfile,
-    deleteUser,
-    fetchAllUsers,
-    refreshUser,
-    clearAuthData,
-    authenticatedRequest,
-    refreshAccessToken,
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -473,4 +13,428 @@ export const useAuth = () => {
   return context;
 };
 
-export default AuthContext;
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Initialize auth state from localStorage
+  useEffect(() => {
+    const initializeAuth = () => {
+      try {
+        const storedToken = localStorage.getItem("token");
+        const storedUser = localStorage.getItem("user");
+
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+          
+          // Verify token is still valid
+          verifyToken(storedToken);
+        }
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+        // Clear invalid data
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  // Verify token validity
+  const verifyToken = async (tokenToVerify = token) => {
+    if (!tokenToVerify) return false;
+
+    try {
+      const response = await fetch(`${API_URL}/api/verify-token`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${tokenToVerify}`,
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
+        }
+        return true;
+      } else {
+        // Token is invalid
+        logout();
+        return false;
+      }
+    } catch (error) {
+      console.error("Token verification failed:", error);
+      logout();
+      return false;
+    }
+  };
+
+  // Enhanced authenticated request function
+  const authenticatedRequest = async (url, options = {}) => {
+    if (!token) {
+      throw new Error("No authentication token available");
+    }
+
+    const defaultOptions = {
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        ...options.headers,
+      },
+      credentials: "include",
+    };
+
+    const finalOptions = { ...defaultOptions, ...options };
+
+    try {
+      const response = await fetch(url, finalOptions);
+
+      // Handle token expiration
+      if (response.status === 401) {
+        logout();
+        toast.error("Session expired. Please log in again.");
+        throw new Error("Authentication expired");
+      }
+
+      return response;
+    } catch (error) {
+      console.error("Authenticated request failed:", error);
+      throw error;
+    }
+  };
+
+  // Login function - CORRECTED to use /api/login
+  const login = async (credentials) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_URL}/api/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const { access_token, user: userData, message } = data;
+        
+        if (access_token && userData) {
+          setToken(access_token);
+          setUser(userData);
+          
+          // Store in localStorage
+          localStorage.setItem("token", access_token);
+          localStorage.setItem("user", JSON.stringify(userData));
+          
+          toast.success(message || "Login successful!");
+          return { success: true, user: userData };
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } else {
+        const errorMessage = data.error || data.message || "Login failed";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      const errorMessage = error.message || "Network error during login";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Register function - CORRECTED to use /api/register
+  const register = async (userData) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_URL}/api/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(userData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const { access_token, user: newUser, message } = data;
+        
+        if (access_token && newUser) {
+          setToken(access_token);
+          setUser(newUser);
+          
+          // Store in localStorage
+          localStorage.setItem("token", access_token);
+          localStorage.setItem("user", JSON.stringify(newUser));
+          
+          toast.success(message || "Registration successful!");
+          return { success: true, user: newUser };
+        } else {
+          toast.success(data.message || "Registration successful! Please log in.");
+          return { success: true, requiresLogin: true };
+        }
+      } else {
+        const errorMessage = data.error || data.message || "Registration failed";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      const errorMessage = error.message || "Network error during registration";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout function - CORRECTED to use /api/logout
+  const logout = async (showMessage = true) => {
+    try {
+      if (token) {
+        // Call logout endpoint to invalidate token on server
+        await fetch(`${API_URL}/api/logout`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        });
+      }
+    } catch (error) {
+      console.error("Logout request failed:", error);
+      // Continue with local logout even if server request fails
+    } finally {
+      // Clear local state
+      setUser(null);
+      setToken(null);
+      setError(null);
+      
+      // Clear localStorage
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      
+      if (showMessage) {
+        toast.success("Logged out successfully");
+      }
+    }
+  };
+
+  // Change password function
+  const changePassword = async (passwordData) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await authenticatedRequest(`${API_URL}/api/change-password`, {
+        method: "POST",
+        body: JSON.stringify(passwordData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Password changed successfully!");
+        return { success: true };
+      } else {
+        const errorMessage = data.error || "Failed to change password";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error("Change password error:", error);
+      const errorMessage = error.message || "Network error";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Forgot password function
+  const forgotPassword = async (email) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_URL}/api/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Password reset email sent!");
+        return { success: true };
+      } else {
+        const errorMessage = data.error || "Failed to send reset email";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      const errorMessage = error.message || "Network error";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh token function
+  const refreshToken = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/refresh`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const { access_token } = data;
+        
+        if (access_token) {
+          setToken(access_token);
+          localStorage.setItem("token", access_token);
+          return true;
+        }
+      }
+      
+      // If refresh fails, logout
+      logout(false);
+      return false;
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      logout(false);
+      return false;
+    }
+  };
+
+  // Update user profile
+  const updateProfile = async (profileData) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await authenticatedRequest(`${API_URL}/api/me`, {
+        method: "PATCH",
+        body: JSON.stringify(profileData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUser(data.user || data);
+        localStorage.setItem("user", JSON.stringify(data.user || data));
+        toast.success("Profile updated successfully!");
+        return { success: true, user: data.user || data };
+      } else {
+        const errorMessage = data.error || "Failed to update profile";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error("Update profile error:", error);
+      const errorMessage = error.message || "Network error";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if user is admin
+  const isAdmin = () => {
+    return user && user.is_admin === true;
+  };
+
+  // Check if user is blocked
+  const isBlocked = () => {
+    return user && user.is_blocked === true;
+  };
+
+  // Check if user is active
+  const isActive = () => {
+    return user && user.is_active !== false;
+  };
+
+  const value = {
+    // State
+    user,
+    token,
+    loading,
+    error,
+    
+    // Authentication functions
+    login,
+    register,
+    logout,
+    
+    // Profile management
+    changePassword,
+    forgotPassword,
+    updateProfile,
+    
+    // Token management
+    verifyToken,
+    refreshToken,
+    
+    // Utility functions
+    authenticatedRequest,
+    isAdmin,
+    isBlocked,
+    isActive,
+    
+    // Computed properties
+    isAuthenticated: !!user && !!token,
+    isGuest: !user || !token,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

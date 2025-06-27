@@ -375,8 +375,8 @@ with app.app_context():
         # Check critical routes that frontend expects
         logger.info("🔍 Critical Routes Check:")
         critical_routes = [
-            '/api/auth/login',
-            '/api/auth/register', 
+            '/api/login',           # CORRECTED: Actual working auth routes
+            '/api/register',        # CORRECTED: Actual working auth routes
             '/api/posts',
             '/api/posts/<',         # For dynamic routes like /api/posts/<id>
             '/api/comments',

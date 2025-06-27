@@ -3,19 +3,6 @@ from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
-# Association tables for many-to-many relationships
-comment_likes = db.Table(
-    'comment_likes',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('comment_id', db.Integer, db.ForeignKey('comments.id'), primary_key=True)
-)
-
-post_likes = db.Table(
-    'post_likes',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True)
-)
-
 class User(db.Model):
     __tablename__ = 'users'
 
@@ -33,21 +20,7 @@ class User(db.Model):
     posts = db.relationship("Post", backref="user", lazy=True, cascade="all, delete-orphan")
     comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan")
     votes = db.relationship('Vote', backref='user', lazy='dynamic', cascade='all, delete-orphan')
-
-    # Many-to-many relationships for likes
-    liked_comments = db.relationship(
-        'Comment',
-        secondary=comment_likes,
-        backref=db.backref('liked_by_users', lazy='dynamic'),
-        lazy='dynamic'
-    )
-
-    liked_posts = db.relationship(
-        'Post',
-        secondary=post_likes,
-        backref=db.backref('liked_by_users', lazy='dynamic'),
-        lazy='dynamic'
-    )
+    likes = db.relationship('Like', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
@@ -84,12 +57,13 @@ class Post(db.Model):
     # Relationships
     comments = db.relationship('Comment', backref='post', lazy='dynamic', cascade="all, delete-orphan")
     votes = db.relationship('Vote', backref='post', lazy='dynamic', cascade="all, delete-orphan")
+    likes = db.relationship('Like', backref='post', lazy='dynamic', cascade="all, delete-orphan")
 
     # Computed properties for likes and votes
     @property
     def likes_count(self):
         """Get the number of users who liked this post"""
-        return self.liked_by_users.count()
+        return self.likes.count()
 
     @property
     def vote_score(self):
@@ -143,11 +117,13 @@ class Post(db.Model):
                 'username': self.user.username
             }
 
-        # Add user's vote if current_user is provided
+        # Add user's vote and like status if current_user is provided
         if current_user:
             user_vote = self.votes.filter_by(user_id=current_user.id).first()
             data['user_vote'] = user_vote.value if user_vote else None
-            data['user_liked'] = current_user in self.liked_by_users
+            
+            user_like = self.likes.filter_by(user_id=current_user.id).first()
+            data['user_liked'] = user_like is not None
         
         return data
 
@@ -173,18 +149,16 @@ class Comment(db.Model):
 
     # Relationships
     votes = db.relationship('Vote', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
+    likes = db.relationship('Like', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
     
     # Self-referential relationship for replies
     replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), lazy='dynamic')
-
-    # Remove the old likes column since we're using the relationship
-    # likes = db.Column(db.Integer, default=0, nullable=False)  # Remove this line
 
     # Computed properties for likes and votes
     @property
     def likes_count(self):
         """Get the number of users who liked this comment"""
-        return self.liked_by_users.count()
+        return self.likes.count()
 
     @property
     def vote_score(self):
@@ -238,11 +212,13 @@ class Comment(db.Model):
                 'username': self.user.username
             }
 
-        # Add user's vote if current_user is provided
+        # Add user's vote and like status if current_user is provided
         if current_user:
             user_vote = self.votes.filter_by(user_id=current_user.id).first()
             data['user_vote'] = user_vote.value if user_vote else None
-            data['user_liked'] = current_user in self.liked_by_users
+            
+            user_like = self.likes.filter_by(user_id=current_user.id).first()
+            data['user_liked'] = user_like is not None
         
         return data
 
@@ -289,6 +265,43 @@ class Vote(db.Model):
     def __repr__(self):
         target = f"Post {self.post_id}" if self.post_id else f"Comment {self.comment_id}"
         return f"<Vote user_id={self.user_id} {target} value={self.value}>"
+
+class Like(db.Model):
+    __tablename__ = 'likes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Foreign keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True, index=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
+
+    # Constraints to ensure data integrity
+    __table_args__ = (
+        # Ensure one like per user per post/comment
+        db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_like'),
+        db.UniqueConstraint('user_id', 'comment_id', name='unique_user_comment_like'),
+        # Ensure like targets either post OR comment, not both
+        db.CheckConstraint(
+            '(post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)', 
+            name='like_target_constraint'
+        )
+    )
+
+    def to_dict(self):
+        """Convert like to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'post_id': self.post_id,
+            'comment_id': self.comment_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+    def __repr__(self):
+        target = f"Post {self.post_id}" if self.post_id else f"Comment {self.comment_id}"
+        return f"<Like user_id={self.user_id} {target}>"
 
 class TokenBlocklist(db.Model):
     __tablename__ = 'token_blocklist'
