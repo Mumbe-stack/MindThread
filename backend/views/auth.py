@@ -1,8 +1,4 @@
-from models import db, User
-from werkzeug.security import check_password_hash
-from flask_jwt_extended import create_access_token
-from flask import request, jsonify, current_app
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity, get_jwt
@@ -11,46 +7,58 @@ from flask_mail import Message
 from datetime import datetime, timezone
 
 from models import db, User, TokenBlocklist
-from flask import current_app
 
 auth_bp = Blueprint("auth_bp", __name__)
 
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.get_json()
-
-    if not data or not all(k in data for k in ("username", "email", "password")):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    if len(data["username"]) < 3:
-        return jsonify({"error": "Username must be at least 3 characters"}), 400
-
-    if len(data["password"]) < 6:
-        return jsonify({"error": "Password must be at least 6 characters"}), 400
-
-    if User.query.filter_by(email=data["email"]).first():
-        return jsonify({"error": "Email already exists"}), 409
-
-    if User.query.filter_by(username=data["username"]).first():
-        return jsonify({"error": "Username already exists"}), 409
-
+    """User registration endpoint"""
     try:
-        hashed_pw = generate_password_hash(data["password"])
+        data = request.get_json()
+
+        # Validate input data
+        if not data or not all(k in data for k in ("username", "email", "password")):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        username = data["username"].strip()
+        email = data["email"].strip().lower()
+        password = data["password"].strip()
+
+        # Validation checks
+        if len(username) < 3:
+            return jsonify({"error": "Username must be at least 3 characters"}), 400
+
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+        # Check for existing users
+        if User.query.filter_by(email=email).first():
+            return jsonify({"error": "Email already exists"}), 409
+
+        if User.query.filter_by(username=username).first():
+            return jsonify({"error": "Username already exists"}), 409
+
+        # Create new user
+        hashed_pw = generate_password_hash(password)
         new_user = User(
-            username=data["username"].strip(),
-            email=data["email"].strip().lower(),
+            username=username,
+            email=email,
             password_hash=hashed_pw
         )
 
         db.session.add(new_user)
         db.session.commit()
 
+        # Send welcome email (optional - won't fail registration if email fails)
         try:
-            msg = Message("Welcome to MindThread!",
-                          recipients=[new_user.email])
-            msg.body = f"Hi {new_user.username},\n\nWelcome to MindThread! We're excited to have you onboard.\n\nHappy posting!\nMindThread Team"
-            current_app.extensions['mail'].send(msg)
+            if current_app.extensions.get('mail'):
+                msg = Message(
+                    "Welcome to MindThread!",
+                    recipients=[new_user.email]
+                )
+                msg.body = f"Hi {new_user.username},\n\nWelcome to MindThread! We're excited to have you onboard.\n\nHappy posting!\nMindThread Team"
+                current_app.extensions['mail'].send(msg)
         except Exception as e:
             current_app.logger.warning(f"Email send failed: {e}")
 
@@ -72,33 +80,36 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
-
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "").strip()
-
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
-
+    """User login endpoint"""
     try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "").strip()
+
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+
+        # Find user by email
         user = User.query.filter_by(email=email).first()
 
         if not user:
-            current_app.logger.warning(
-                f"Login failed: No user found for {email}")
+            current_app.logger.warning(f"Login failed: No user found for {email}")
             return jsonify({"error": "Invalid credentials"}), 401
 
+        # Check password
         if not check_password_hash(user.password_hash, password):
-            current_app.logger.warning(
-                f"Login failed: Password mismatch for {email}")
+            current_app.logger.warning(f"Login failed: Password mismatch for {email}")
             return jsonify({"error": "Invalid credentials"}), 401
 
+        # Check if user is blocked
         if user.is_blocked:
             return jsonify({"error": "Your account has been blocked. Contact support."}), 403
 
+        # Create access token
         access_token = create_access_token(identity=user.id)
 
         return jsonify({
@@ -118,12 +129,16 @@ def login():
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
+    """Get current authenticated user details"""
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
 
         if not user:
             return jsonify({"error": "User not found"}), 404
+
+        if user.is_blocked:
+            return jsonify({"error": "Account has been blocked"}), 403
 
         return jsonify({
             "success": True,
@@ -143,17 +158,23 @@ def get_current_user():
 @auth_bp.route("/logout", methods=["DELETE"])
 @jwt_required()
 def logout():
+    """User logout endpoint - blacklists the JWT token"""
     try:
         jti = get_jwt()["jti"]
         now = datetime.now(timezone.utc)
 
+        # Add token to blocklist
         blocked_token = TokenBlocklist(jti=jti, created_at=now)
         db.session.add(blocked_token)
         db.session.commit()
 
-        return jsonify({"success": True, "message": "Logged out successfully"}), 200
+        return jsonify({
+            "success": True,
+            "message": "Logged out successfully"
+        }), 200
 
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Logout error: {e}")
         return jsonify({"error": "Logout failed"}), 500
 
@@ -161,6 +182,7 @@ def logout():
 @auth_bp.route("/refresh", methods=["POST"])
 @jwt_required()
 def refresh_token():
+    """Refresh JWT access token"""
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -168,6 +190,7 @@ def refresh_token():
         if not user or user.is_blocked:
             return jsonify({"error": "User not found or blocked"}), 404
 
+        # Create new access token
         new_token = create_access_token(identity=user_id)
 
         return jsonify({
@@ -183,6 +206,7 @@ def refresh_token():
 @auth_bp.route("/change-password", methods=["POST"])
 @jwt_required()
 def change_password():
+    """Change user password"""
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -190,25 +214,54 @@ def change_password():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
+        if user.is_blocked:
+            return jsonify({"error": "Account has been blocked"}), 403
+
         data = request.get_json()
-        current_password = data.get("current_password")
-        new_password = data.get("new_password")
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        current_password = data.get("current_password", "").strip()
+        new_password = data.get("new_password", "").strip()
 
         if not current_password or not new_password:
             return jsonify({"error": "Current and new password are required"}), 400
 
+        # Verify current password
         if not check_password_hash(user.password_hash, current_password):
             return jsonify({"error": "Current password is incorrect"}), 401
 
+        # Validate new password
         if len(new_password) < 6:
             return jsonify({"error": "New password must be at least 6 characters"}), 400
 
+        # Update password
         user.password_hash = generate_password_hash(new_password)
         db.session.commit()
 
-        return jsonify({"success": True, "message": "Password changed successfully"}), 200
+        return jsonify({
+            "success": True,
+            "message": "Password changed successfully"
+        }), 200
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Change password error: {e}")
         return jsonify({"error": "Failed to change password"}), 500
+
+
+@auth_bp.route("/verify-email", methods=["POST"])
+def verify_email():
+    """Email verification endpoint (placeholder for future implementation)"""
+    return jsonify({
+        "message": "Email verification not implemented yet"
+    }), 501
+
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    """Forgot password endpoint (placeholder for future implementation)"""
+    return jsonify({
+        "message": "Password reset not implemented yet"
+    }), 501

@@ -1,6 +1,6 @@
 from datetime import timedelta
 import os
-from flask import Flask, request, jsonify
+from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_mail import Mail
@@ -10,29 +10,24 @@ from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp, admin
 
 app = Flask(__name__)
 
-
-CORS(app, resources={
-    r"/api/*": {
+# Enhanced CORS Configuration
+CORS(
+    app,
+    resources={r"/api/*": {
         "origins": [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173", 
-            "https://mindthread-1.onrender.com",  
-            "https://mindthreadbloggingapp.netlify.app"
-        ],
-        "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept"],
-        "supports_credentials": True,
-        "expose_headers": ["Content-Type", "Authorization"]
-    }
-})
+            "https://mindthread-1.onrender.com",
+               
+        ]
+    }},
+    supports_credentials=True
+)
 
-
+# Database Configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://mindthread_db_56lm_user:Kdjo6KFm6y4jsU3TFEZJ5hcgBF7g8fAC@dpg-d1evccfgi27c7384mvc0-a.oregon-postgres.render.com/mindthread_db_56lm"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-
+# JWT Configuration
 app.config["JWT_SECRET_KEY"] = "jwt_secre542cc4f32fc0a619979df2b56083fb21c97ea4c9e0e2b7d25779734357a1810486ef0c480c8fb9da1990c602dbf1438b9b6f3fa72716b13baf28612496d8fcd8t_key"
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=48)
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
@@ -40,7 +35,7 @@ app.config["JWT_BLACKLIST_ENABLED"] = True
 app.config["JWT_BLACKLIST_TOKEN_CHECKS"] = ["access"]
 app.config["JWT_VERIFY_SUB"] = False
 
-
+# Mail Configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -58,50 +53,6 @@ db.init_app(app)
 migrate = Migrate(app, db)
 mail = Mail(app)
 jwt = JWTManager(app)
-
-# Additional CORS handling for preflight requests
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = jsonify({'message': 'CORS preflight successful'})
-        origin = request.headers.get('Origin')
-        
-        # Check if origin is allowed
-        allowed_origins = [
-            "http://localhost:5173",
-            "http://localhost:3000", 
-            "http://127.0.0.1:5173",
-            "https://mindthread-1.onrender.com",
-            "https://mindthreadbloggingapp.netlify.app"
-        ]
-        
-        if origin in allowed_origins:
-            response.headers.add("Access-Control-Allow-Origin", origin)
-        
-        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,Accept")
-        response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,PATCH,OPTIONS")
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
-
-# Add CORS headers to all responses
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    allowed_origins = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173", 
-        "https://mindthread-1.onrender.com",
-        "https://mindthreadbloggingapp.netlify.app"
-    ]
-    
-    if origin in allowed_origins:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-    
-    response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,Accept")
-    response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,PATCH,OPTIONS")
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
 
 # JWT Event Handlers
 @jwt.token_in_blocklist_loader
@@ -130,22 +81,6 @@ app.register_blueprint(auth_bp, url_prefix="/api/auth")
 app.register_blueprint(admin_bp, url_prefix="/api/admin")
 app.register_blueprint(home_bp)
 
-# Health check endpoint for debugging
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    return jsonify({
-        'status': 'healthy',
-        'message': 'MindThread API is running',
-        'cors_enabled': True,
-        'allowed_origins': [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173",
-            "https://mindthread-1.onrender.com", 
-            "https://mindthreadbloggingapp.netlify.app"
-        ]
-    }), 200
-
 # Error Handlers
 @app.errorhandler(404)
 def not_found(error):
@@ -173,7 +108,6 @@ with app.app_context():
         create_upload_dirs()
         print("✅ Connected to the database and created upload directories.")
         print("✅ Admin blueprint registered at /api/admin")
-        print("✅ CORS configured for frontend domain")
 
         print("\n📋 API Routes Registration Check:")
         relevant_routes = []
@@ -190,15 +124,10 @@ with app.app_context():
             found = any(route in r for r in relevant_routes)
             print(f"   {'✅ Found' if found else '❌ Missing'}: {route}")
 
-        print("\n🌐 CORS Configuration:")
-        print("   ✅ Netlify domain: https://mindthreadbloggingapp.netlify.app")
-        print("   ✅ Render domain: https://mindthread-1.onrender.com")
-        print("   ✅ Local development domains included")
-
     except Exception as e:
         print("❌ Database Error:", e)
 
 # Run App
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port)

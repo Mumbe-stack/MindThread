@@ -3,67 +3,52 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
-const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
+const api_url = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
   const navigate = useNavigate();
-
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+  const [token, setToken] = useState(localStorage.getItem("token"));
 
   useEffect(() => {
-    if (token) {
-      fetchCurrentUser();
-    }
+    if (token) fetchCurrentUser();
   }, [token]);
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/users/me`, {
-        method: "GET",
+      const res = await fetch(`${api_url}/api/users/me`, {
         headers: {
-          "Content-Type": "application/json",
-          ...authHeader,
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       });
 
-      if (!res.ok) throw new Error("Unauthorized or session expired");
-
-      const data = await res.json();
-      setUser({
-        id: data.id,
-        username: data.username,
-        email: data.email,
-        is_admin: data.is_admin,
-        created_at: data.created_at,
-      });
-    } catch (error) {
-      console.error("❌ Fetch user failed:", error.message);
-      toast.error("Session expired. Please login again.");
-      handleUnauth();
+      if (res.ok) {
+        const data = await res.json();
+        setUser({
+          id: data.id,
+          username: data.username,
+          email: data.email,
+          is_admin: data.is_admin,
+          created_at: data.created_at,
+        });
+      } else {
+        localStorage.removeItem("token");
+        setToken(null);
+        setUser(null);
+      }
+    } catch {
+      toast.error("Failed to fetch user data");
     }
-  };
-
-  const handleUnauth = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
   };
 
   const login = async (email, password) => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/auth/login`, {
+      const res = await fetch(`${api_url}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password: password.trim(),
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
@@ -75,16 +60,15 @@ export const AuthProvider = ({ children }) => {
           id: data.user_id,
           username: data.username,
           is_admin: data.is_admin,
-          email: data.email,
         });
         toast.success("Login successful");
+        navigate("/");
         return true;
       } else {
         toast.error(data.error || "Invalid credentials");
         return false;
       }
-    } catch (err) {
-      console.error("Login error:", err);
+    } catch {
       toast.error("Network error during login");
       return false;
     }
@@ -92,7 +76,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (form) => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/auth/register`, {
+      const res = await fetch(`${api_url}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -115,29 +99,34 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch(`${VITE_API_URL}/api/auth/logout`, {
+      const res = await fetch(`${api_url}/api/auth/logout`, {
         method: "DELETE",
         headers: {
-          ...authHeader,
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       });
-      toast.success("Logged out successfully");
+
+      if (res.ok) {
+        localStorage.removeItem("token");
+        setToken(null);
+        setUser(null);
+        toast.success("Logged out successfully");
+        navigate("/");
+      } else {
+        toast.error("Logout failed");
+      }
     } catch {
-      toast.error("Logout failed");
-    } finally {
-      handleUnauth();
-      navigate("/");
+      toast.error("Network error during logout");
     }
   };
 
   const updateProfile = async (updates) => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/users/${user.id}`, {
+      const res = await fetch(`${api_url}/api/users/${user.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          ...authHeader,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updates),
       });
@@ -155,17 +144,16 @@ export const AuthProvider = ({ children }) => {
 
   const deleteUser = async () => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/users/${user.id}`, {
+      const res = await fetch(`${api_url}/api/users/${user.id}`, {
         method: "DELETE",
         headers: {
-          ...authHeader,
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       });
 
       if (res.ok) {
         toast.success("Account deleted");
-        await logout();
+        logout();
       } else {
         toast.error("Failed to delete account");
       }
@@ -176,16 +164,15 @@ export const AuthProvider = ({ children }) => {
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/users`, {
+      const res = await fetch(`${api_url}/api/users/`, {
         headers: {
-          ...authHeader,
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       });
 
       if (!res.ok) throw new Error("Failed to fetch users");
       return await res.json();
-    } catch {
+    } catch (err) {
       toast.error("Unable to fetch users");
       return [];
     }
@@ -202,7 +189,6 @@ export const AuthProvider = ({ children }) => {
         updateProfile,
         deleteUser,
         fetchAllUsers,
-        setUser,
       }}
     >
       {children}
