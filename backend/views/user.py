@@ -8,13 +8,13 @@ from .utils import block_check_required
 
 user_bp = Blueprint('user_bp', __name__)
 
-# Upload configuration
+
 UPLOAD_FOLDER = 'uploads/avatars'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 def allowed_file(filename):
-    """Check if file extension is allowed"""
+    
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -22,7 +22,7 @@ def allowed_file(filename):
 @user_bp.route("", methods=["GET"])
 @jwt_required()
 def fetch_all_users():
-    """Get all users - Admin Dashboard needs this"""
+   
     try:
         current_user = User.query.get(get_jwt_identity())
         
@@ -55,7 +55,7 @@ def fetch_all_users():
 @user_bp.route("/", methods=["POST"])
 @jwt_required()
 def create_user():
-    """Admin-only: Create a new user"""
+    
     try:
         current_user = User.query.get(get_jwt_identity())
 
@@ -71,21 +71,21 @@ def create_user():
         email = data["email"].strip().lower()
         password = data["password"].strip()
 
-        # Validation
+       
         if len(username) < 3:
             return jsonify({"error": "Username must be at least 3 characters"}), 400
         
         if len(password) < 6:
             return jsonify({"error": "Password must be at least 6 characters"}), 400
 
-        # Check for existing users
+        
         if User.query.filter_by(email=email).first():
             return jsonify({"error": "Email already exists"}), 409
         
         if User.query.filter_by(username=username).first():
             return jsonify({"error": "Username already exists"}), 409
 
-        # Create new user
+        
         new_user = User(
             username=username,
             email=email,
@@ -116,12 +116,12 @@ def create_user():
 @user_bp.route("/<int:user_id>", methods=["GET"])
 @jwt_required()
 def fetch_user_by_id(user_id):
-    """Get user by ID - own profile or admin access"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        # Check permissions
+       
         if current_user_id != user_id and (not current_user or not current_user.is_admin):
             return jsonify({"error": "Access denied"}), 403
 
@@ -138,7 +138,7 @@ def fetch_user_by_id(user_id):
             "created_at": user.created_at.isoformat()
         }
 
-        # Add posts and comments if they exist
+        
         if hasattr(user, 'posts'):
             user_data["posts"] = [
                 {
@@ -167,7 +167,7 @@ def fetch_user_by_id(user_id):
 @user_bp.route("/me", methods=["GET"])
 @jwt_required()
 def fetch_current_user():
-    """Get current user's profile"""
+    
     try:
         user = User.query.get(get_jwt_identity())
 
@@ -183,7 +183,7 @@ def fetch_current_user():
             "created_at": user.created_at.isoformat()
         }
 
-        # Add posts and comments if they exist
+       
         if hasattr(user, 'posts'):
             user_data["posts"] = [
                 {
@@ -213,7 +213,7 @@ def fetch_current_user():
 @jwt_required()
 @block_check_required
 def delete_current_user():
-    """Delete current user's account"""
+   
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -239,7 +239,7 @@ def delete_current_user():
 @user_bp.route("/<int:user_id>", methods=["DELETE"])
 @jwt_required()
 def delete_user_by_id(user_id):
-    """Admin-only: Delete user by ID"""
+   
     try:
         current_user = User.query.get(get_jwt_identity())
 
@@ -268,12 +268,12 @@ def delete_user_by_id(user_id):
 @user_bp.route("/<int:user_id>", methods=["PATCH"])
 @jwt_required()
 def update_user(user_id):
-    """Update user profile - own profile or admin access"""
+  
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        # Check permissions
+      
         if current_user_id != user_id and (not current_user or not current_user.is_admin):
             return jsonify({"error": "Access denied"}), 403
 
@@ -285,7 +285,7 @@ def update_user(user_id):
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        # Update username if provided
+      
         if "username" in data and data["username"].strip():
             new_username = data["username"].strip()
             existing = User.query.filter_by(username=new_username).first()
@@ -293,7 +293,7 @@ def update_user(user_id):
                 return jsonify({"error": "Username already exists"}), 409
             user.username = new_username
 
-        # Update email if provided
+       
         if "email" in data and data["email"].strip():
             new_email = data["email"].strip().lower()
             existing = User.query.filter_by(email=new_email).first()
@@ -301,7 +301,7 @@ def update_user(user_id):
                 return jsonify({"error": "Email already exists"}), 409
             user.email = new_email
 
-        # Update admin status (admin only)
+        
         if "is_admin" in data and current_user and current_user.is_admin:
             user.is_admin = bool(data["is_admin"])
 
@@ -327,7 +327,7 @@ def update_user(user_id):
 @user_bp.route("/<int:user_id>/block", methods=["PATCH"])
 @jwt_required()
 def toggle_user_block(user_id):
-    """Admin-only: Block or unblock a user"""
+    
     try:
         current_user = User.query.get(get_jwt_identity())
 
@@ -358,7 +358,7 @@ def toggle_user_block(user_id):
 @jwt_required()
 @block_check_required
 def upload_avatar():
-    """Upload user avatar image"""
+   
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -366,7 +366,7 @@ def upload_avatar():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Check if file was uploaded
+        
         if 'avatar' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
 
@@ -378,21 +378,21 @@ def upload_avatar():
         if not allowed_file(file.filename):
             return jsonify({"error": "Invalid file type. Allowed: PNG, JPG, JPEG, GIF"}), 400
 
-        # Check file size
+       
         file_data = file.read()
         if len(file_data) > MAX_FILE_SIZE:
             return jsonify({"error": "File too large. Maximum size: 5MB"}), 400
         
-        file.seek(0)  # Reset file pointer
+        file.seek(0)  
 
-        # Create upload directory
+       
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-        # Generate secure filename
+        
         filename = secure_filename(f"user_{user_id}_{file.filename}")
         filepath = os.path.join(UPLOAD_FOLDER, filename)
 
-        # Save file
+        
         file.save(filepath)
 
         return jsonify({
@@ -409,7 +409,7 @@ def upload_avatar():
 @user_bp.route("/<int:user_id>/stats", methods=["GET"])
 @jwt_required()
 def get_user_stats(user_id):
-    """Get user statistics"""
+    
     try:
         user = User.query.get_or_404(user_id)
 

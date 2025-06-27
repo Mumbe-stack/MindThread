@@ -1,4 +1,3 @@
-# Import and expose only the Blueprints
 from .post import post_bp
 from .comment import comment_bp
 from .user import user_bp

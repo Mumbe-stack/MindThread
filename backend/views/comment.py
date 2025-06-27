@@ -9,7 +9,7 @@ comment_bp = Blueprint('comment_bp', __name__)
 
 @comment_bp.route("", methods=["GET"])
 def list_comments_no_slash():
-    """Get comments for a post - no authentication required to view (no trailing slash)"""
+    
     try:
         post_id = request.args.get("post_id")
         user_id = request.args.get("user_id")
@@ -25,17 +25,17 @@ def list_comments_no_slash():
 
         comments = query.order_by(Comment.created_at.asc()).all()
 
-        # Check if user is authenticated (optional for viewing)
+        
         current_user_id = None
         try:
             verify_jwt_in_request(optional=True)
             current_user_id = get_jwt_identity()
         except:
-            pass  # User not authenticated, that's fine for viewing
+            pass  
 
         comments_data = []
         for c in comments:
-            # Handle different attribute names for likes
+            
             likes_count = 0
             liked_by_list = []
             
@@ -69,7 +69,7 @@ def list_comments_no_slash():
 
 @comment_bp.route("/", methods=["GET"])
 def list_comments():
-    """Get comments for a post - no authentication required to view (with trailing slash)"""
+    
     return list_comments_no_slash()
 
 
@@ -77,7 +77,7 @@ def list_comments():
 @jwt_required()
 @block_check_required
 def create_comment():
-    """Create a new comment - authentication required"""
+   
     try:
         data = request.get_json()
         user_id = get_jwt_identity()
@@ -85,7 +85,7 @@ def create_comment():
         if not data.get("content") or not data.get("post_id"):
             return jsonify({"error": "Missing fields: content and post_id are required"}), 400
 
-        # Validate content
+        
         content = data["content"].strip()
         if len(content) < 1:
             return jsonify({"error": "Comment content cannot be empty"}), 400
@@ -139,7 +139,7 @@ def create_comment():
 @comment_bp.route("/admin", methods=["GET"])
 @jwt_required()
 def get_all_comments():
-    """Get all comments - Admin Dashboard needs this"""
+    
     try:
         current_user = User.query.get(get_jwt_identity())
         
@@ -165,7 +165,7 @@ def get_all_comments():
 @comment_bp.route("/<int:comment_id>/like", methods=["POST"])
 @jwt_required()
 def like_comment(comment_id):
-    """Toggle like on a comment - authentication required"""
+    
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -174,13 +174,13 @@ def like_comment(comment_id):
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Check if user already liked this comment
+        
         if hasattr(comment, 'liked_by_users') and user in comment.liked_by_users:
             comment.liked_by_users.remove(user)
             message = "Comment unliked"
         else:
             if not hasattr(comment, 'liked_by_users'):
-                # Initialize the relationship if it doesn't exist
+               
                 comment.liked_by_users = []
             comment.liked_by_users.append(user)
             message = "Comment liked"
@@ -202,11 +202,11 @@ def like_comment(comment_id):
 
 @comment_bp.route("/<int:comment_id>/like/", methods=["POST", "OPTIONS"])
 def like_comment_with_slash(comment_id):
-    """Handle the route with trailing slash for compatibility"""
+   
     if request.method == "OPTIONS":
         return jsonify({"ok": True}), 200
     
-    # Redirect to the main like function
+    
     return like_comment(comment_id)
 
 
@@ -260,7 +260,7 @@ def update_comment(id):
 
 @comment_bp.route("/<int:parent_id>/replies", methods=["GET"])
 def get_replies(parent_id):
-    """Get replies to a comment - no authentication required"""
+   
     parent = Comment.query.get(parent_id)
     if not parent:
         return jsonify({"error": f"Comment with ID {parent_id} does not exist"}), 404

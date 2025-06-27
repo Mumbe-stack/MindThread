@@ -10,7 +10,7 @@ post_bp = Blueprint('post_bp', __name__)
 @post_bp.route("", methods=["GET"])  
 @jwt_required(optional=True)
 def get_all_posts():
-    """Get all posts - Modified for AdminDashboard compatibility"""
+    
     try:
         current_user = get_jwt_identity()
         user = User.query.get(current_user) if current_user else None
@@ -22,7 +22,7 @@ def get_all_posts():
 
         posts_data = []
         for post in posts:
-            # Get like information
+            
             likes_count = 0
             liked_by_list = []
             
@@ -63,7 +63,7 @@ def get_single_post(id):
         if not post.is_approved and (not user or not user.is_admin):
             return jsonify({"error": "Post not available"}), 403
 
-        # Get like information
+        
         likes_count = 0
         liked_by_list = []
         
@@ -112,7 +112,7 @@ def create_post():
         if len(title) > 200:
             return jsonify({"error": "Title must be under 200 characters"}), 400
 
-        # Check for duplicate title for this user
+        
         existing_post = Post.query.filter_by(user_id=user_id, title=title).first()
         if existing_post:
             return jsonify({"error": "You already have a post with this title"}), 409
@@ -123,7 +123,7 @@ def create_post():
             tags=tags or None,
             user_id=user_id,
             created_at=datetime.now(timezone.utc),
-            is_approved=user.is_admin  # Auto-approve for admins
+            is_approved=user.is_admin  
         )
 
         db.session.add(new_post)
@@ -149,7 +149,7 @@ def update_post(id):
         post = Post.query.get_or_404(id)
         user = User.query.get(get_jwt_identity())
 
-        # Check permissions
+        
         if post.user_id != user.id and not user.is_admin:
             return jsonify({"error": "Unauthorized to edit this post"}), 403
 
@@ -158,7 +158,7 @@ def update_post(id):
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        # Update title if provided
+        
         if "title" in data:
             title = data["title"].strip()
             if not title:
@@ -166,7 +166,7 @@ def update_post(id):
             if len(title) > 200:
                 return jsonify({"error": "Title must be under 200 characters"}), 400
             
-            # Check for duplicate title (excluding current post)
+            
             duplicate = Post.query.filter(
                 Post.title == title,
                 Post.user_id == post.user_id,
@@ -177,14 +177,14 @@ def update_post(id):
             
             post.title = title
 
-        # Update content if provided
+        
         if "content" in data:
             content = data["content"].strip()
             if not content:
                 return jsonify({"error": "Content cannot be empty"}), 400
             post.content = content
 
-        # Update tags if provided
+        
         if "tags" in data:
             post.tags = data["tags"].strip() or None
 
@@ -208,7 +208,7 @@ def delete_post(id):
         post = Post.query.get_or_404(id)
         user = User.query.get(get_jwt_identity())
 
-        # Check permissions
+        
         if post.user_id != user.id and not user.is_admin:
             return jsonify({"error": "Unauthorized to delete this post"}), 403
 
@@ -229,7 +229,7 @@ def delete_post(id):
 @post_bp.route("/<int:id>/like", methods=["POST"])
 @jwt_required()
 def like_post(id):
-    """Toggle like on a post - authentication required"""
+   
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -238,11 +238,11 @@ def like_post(id):
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Initialize liked_by relationship if it doesn't exist
+      
         if not hasattr(post, 'liked_by'):
             post.liked_by = []
 
-        # Toggle like status
+        
         if user in post.liked_by:
             post.liked_by.remove(user)
             message = "Post unliked successfully"
@@ -268,14 +268,10 @@ def like_post(id):
         return jsonify({"error": "Failed to toggle like"}), 500
 
 
-# REMOVED: Manual OPTIONS handler that was causing CORS conflicts
-# Flask-CORS handles OPTIONS requests automatically
-
-
 @post_bp.route("/<int:id>/approve", methods=["PATCH"])
 @jwt_required()
 def approve_post(id):
-    """Admin-only: Approve or disapprove a post"""
+    
     try:
         user = User.query.get(get_jwt_identity())
         if not user or not user.is_admin:
@@ -301,7 +297,7 @@ def approve_post(id):
 @jwt_required()
 @block_check_required
 def flag_post(id):
-    """Flag or unflag a post for review"""
+    
     try:
         post = Post.query.get_or_404(id)
         post.is_flagged = not post.is_flagged
@@ -322,7 +318,7 @@ def flag_post(id):
 @post_bp.route("/flagged", methods=["GET"])
 @jwt_required()
 def get_flagged_posts():
-    """Admin-only: Get all flagged posts"""
+    
     try:
         user = User.query.get(get_jwt_identity())
         if not user or not user.is_admin:

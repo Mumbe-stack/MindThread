@@ -1,4 +1,3 @@
-# seed.py
 from app import app
 from models import db, User, Post
 from werkzeug.security import generate_password_hash
@@ -8,7 +7,7 @@ with app.app_context():
     db.drop_all()
     db.create_all()
 
-    # Create admin user
+    
     admin = User(
         username="Admin",
         email="administrator@example.com",
@@ -17,7 +16,7 @@ with app.app_context():
     )
     db.session.add(admin)
 
-    # Create sample post
+    
     post = Post(
         title="Welcome to MindThread!",
         content="This is your first post.",

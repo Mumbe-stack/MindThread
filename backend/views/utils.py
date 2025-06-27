@@ -6,7 +6,7 @@ from models import User
 def block_check_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        # Allow preflight requests to pass without checking JWT
+        
         if request.method == "OPTIONS":
             return fn(*args, **kwargs)
 

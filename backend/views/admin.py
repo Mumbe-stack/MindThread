@@ -3,11 +3,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 from models import db, User, Post, Comment
 
-admin_bp = Blueprint("admin_bp", __name__)  # Fixed: __name__ not **name**
+admin_bp = Blueprint("admin_bp", __name__) 
 
-# --- Admin Access Decorator ---
+
 def admin_required(fn):
-    @wraps(fn)  # Added: Proper decorator preservation
+    @wraps(fn)  
     @jwt_required()
     def wrapper(*args, **kwargs):
         user_id = get_jwt_identity()
@@ -17,7 +17,7 @@ def admin_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
-# --- Routes ---
+
 @admin_bp.route("/health", methods=["GET"])
 @admin_required
 def health_check():
@@ -66,7 +66,7 @@ def get_flagged_comments():
     except Exception as e:
         return jsonify({"error": "Failed to fetch flagged comments"}), 500
 
-@admin_bp.route("/stats", methods=["GET"])  # Fixed: removed duplicate /admin prefix
+@admin_bp.route("/stats", methods=["GET"])  
 @admin_required
 def admin_stats():
     try:
