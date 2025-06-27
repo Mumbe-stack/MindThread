@@ -7,16 +7,24 @@ const api_url = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.c
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true); // Add loading state
   const navigate = useNavigate();
   const [token, setToken] = useState(localStorage.getItem("token"));
 
   useEffect(() => {
-    if (token) fetchCurrentUser();
+    if (token) {
+      fetchCurrentUser();
+    } else {
+      setLoading(false); // Stop loading if no token
+    }
   }, [token]);
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users/me`, {
+      setLoading(true);
+      
+    
+      const res = await fetch(`${api_url}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -29,15 +37,24 @@ export const AuthProvider = ({ children }) => {
           username: data.username,
           email: data.email,
           is_admin: data.is_admin,
+          is_blocked: data.is_blocked, 
           created_at: data.created_at,
         });
       } else {
+        
         localStorage.removeItem("token");
         setToken(null);
         setUser(null);
       }
-    } catch {
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
       toast.error("Failed to fetch user data");
+      
+      localStorage.removeItem("token");
+      setToken(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,6 +76,7 @@ export const AuthProvider = ({ children }) => {
         setUser({
           id: data.user_id,
           username: data.username,
+          email: data.email, 
           is_admin: data.is_admin,
         });
         toast.success("Login successful");
@@ -68,7 +86,8 @@ export const AuthProvider = ({ children }) => {
         toast.error(data.error || "Invalid credentials");
         return false;
       }
-    } catch {
+    } catch (error) {
+      console.error("Login error:", error);
       toast.error("Network error during login");
       return false;
     }
@@ -89,16 +108,21 @@ export const AuthProvider = ({ children }) => {
       if (res.ok) {
         toast.success("Account created successfully");
         navigate("/login");
+        return true;
       } else {
         toast.error(data.error || "Registration failed");
+        return false;
       }
-    } catch {
+    } catch (error) {
+      console.error("Registration error:", error);
       toast.error("Network error during registration");
+      return false;
     }
   };
 
   const logout = async () => {
     try {
+     
       const res = await fetch(`${api_url}/api/auth/logout`, {
         method: "DELETE",
         headers: {
@@ -106,17 +130,26 @@ export const AuthProvider = ({ children }) => {
         },
       });
 
+      
+      localStorage.removeItem("token");
+      setToken(null);
+      setUser(null);
+      
       if (res.ok) {
-        localStorage.removeItem("token");
-        setToken(null);
-        setUser(null);
         toast.success("Logged out successfully");
-        navigate("/");
       } else {
-        toast.error("Logout failed");
+        toast.success("Logged out locally"); 
       }
-    } catch {
-      toast.error("Network error during logout");
+      
+      navigate("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+      
+      localStorage.removeItem("token");
+      setToken(null);
+      setUser(null);
+      toast.success("Logged out locally");
+      navigate("/");
     }
   };
 
@@ -133,18 +166,24 @@ export const AuthProvider = ({ children }) => {
 
       if (res.ok) {
         toast.success("Profile updated");
-        fetchCurrentUser();
+        await fetchCurrentUser(); 
+        return true;
       } else {
-        toast.error("Update failed");
+        const data = await res.json();
+        toast.error(data.error || "Update failed");
+        return false;
       }
-    } catch {
+    } catch (error) {
+      console.error("Update profile error:", error);
       toast.error("Error updating profile");
+      return false;
     }
   };
 
   const deleteUser = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users/${user.id}`, {
+      
+      const res = await fetch(`${api_url}/api/users/me`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -153,28 +192,49 @@ export const AuthProvider = ({ children }) => {
 
       if (res.ok) {
         toast.success("Account deleted");
-        logout();
+        
+        localStorage.removeItem("token");
+        setToken(null);
+        setUser(null);
+        navigate("/");
+        return true;
       } else {
-        toast.error("Failed to delete account");
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete account");
+        return false;
       }
-    } catch {
+    } catch (error) {
+      console.error("Delete user error:", error);
       toast.error("Error deleting account");
+      return false;
     }
   };
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users/`, {
+      const res = await fetch(`${api_url}/api/users`, { 
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!res.ok) throw new Error("Failed to fetch users");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to fetch users");
+      }
+      
       return await res.json();
     } catch (err) {
+      console.error("Fetch users error:", err);
       toast.error("Unable to fetch users");
       return [];
+    }
+  };
+
+ 
+  const refreshUser = async () => {
+    if (token) {
+      await fetchCurrentUser();
     }
   };
 
@@ -183,12 +243,14 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         token,
+        loading,
         login,
         register,
         logout,
         updateProfile,
         deleteUser,
         fetchAllUsers,
+        refreshUser, 
       }}
     >
       {children}
