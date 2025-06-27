@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from models import db, User, TokenBlocklist
 from flask import current_app
 
-auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
+auth_bp = Blueprint("auth_bp", __name__)
 
 
 @auth_bp.route("/register", methods=["POST"])
@@ -118,7 +118,6 @@ def login():
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
-
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -162,7 +161,6 @@ def logout():
 @auth_bp.route("/refresh", methods=["POST"])
 @jwt_required()
 def refresh_token():
-
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -181,24 +179,10 @@ def refresh_token():
         current_app.logger.error(f"Token refresh error: {e}")
         return jsonify({"error": "Token refresh failed"}), 500
 
-@auth_bp.route("/me", methods=["GET"])
-@jwt_required()
-def me():
-    current_user_id = get_jwt_identity()
-    user = User.query.get_or_404(current_user_id)
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "is_admin": user.is_admin,
-        "created_at": user.created_at.isoformat()
-    }), 200
-
 
 @auth_bp.route("/change-password", methods=["POST"])
 @jwt_required()
 def change_password():
-
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
