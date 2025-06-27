@@ -1,5 +1,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
+as
+const VITE_API_URL = import.meta.env.VITE_API_URL|| "https://mindthread-1.onrender.com";
 
 const CreateUserForm = ({ onClose }) => {
   const [form, setForm] = useState({

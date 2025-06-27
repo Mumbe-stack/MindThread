@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import AvatarUploader from "../components/AvatarUploader";
 import toast from "react-hot-toast";
 
+const VITE_API_URL = import.meta.env.VITE_API_URL|| "https://mindthread-1.onrender.com";
+
 const Profile = () => {
   const { user, deleteUser, token, loading } = useAuth(); 
   const navigate = useNavigate();

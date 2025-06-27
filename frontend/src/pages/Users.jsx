@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
+const VITE_API_URL = import.meta.env.VITE_API_URL|| "https://mindthread-1.onrender.com";
+
 const Users = () => {
   const [users, setUsers] = useState([]);
 
