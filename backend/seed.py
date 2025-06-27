@@ -10,7 +10,7 @@ with app.app_context():
 
     # Create admin user
     admin = User(
-        username="admin",
+        username="Admin",
         email="administrator@example.com",
         password_hash=generate_password_hash("admin123"),
         is_admin=True,
