@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import CommentBox from "../components/CommentBox";
 import toast from "react-hot-toast";
 
-const VITE_API_URL  = import.meta.env.VITE_API_URL ;
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const SinglePost = () => {
   const { id } = useParams();
@@ -20,8 +20,9 @@ const SinglePost = () => {
   const fetchPost = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/posts/${id}`, {
+      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch post");
       const data = await res.json();
@@ -37,25 +38,49 @@ const SinglePost = () => {
   const fetchComments = async () => {
     try {
       setCommentsLoading(true);
-      const res = await fetch(`${VITE_API_URL }/api/comments?post_id=${id}`);
+      // Don't require authentication to view comments
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      
+      // Only add auth header if user is logged in (for like status)
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const res = await fetch(`${VITE_API_URL}/api/comments?post_id=${id}`, {
+        headers,
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch comments: ${res.status}`);
+      }
+      
       const data = await res.json();
+      console.log("Comments fetched:", data); // Debug log
       setComments(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch comments error:", err);
+      // Don't show error toast for public viewing
+      console.log("Failed to load comments:", err.message);
       setComments([]);
     } finally {
       setCommentsLoading(false);
     }
   };
 
-  const refreshComments = () => fetchComments();
+  const refreshComments = async () => {
+    console.log("Refreshing comments..."); // Debug log
+    await fetchComments();
+  };
 
   useEffect(() => {
     if (id) {
       fetchPost();
       fetchComments();
     }
-  }, [id]);
+  }, [id]); // Removed token dependency so comments load regardless of auth status
 
   const toggleLikePost = async () => {
     try {
@@ -65,6 +90,7 @@ const SinglePost = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
@@ -82,6 +108,11 @@ const SinglePost = () => {
   };
 
   const toggleLikeComment = async (commentId) => {
+    if (!user || !token) {
+      toast.error("Please log in to like comments");
+      return;
+    }
+
     try {
       const res = await fetch(`${VITE_API_URL}/api/comments/${commentId}/like`, {
         method: "POST",
@@ -89,20 +120,29 @@ const SinglePost = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include",
       });
+
       if (res.ok) {
         const data = await res.json();
         setComments((prev) =>
           prev.map((c) =>
             c.id === commentId
-              ? { ...c, likes: data.likes, liked_by: data.liked_by }
+              ? { 
+                  ...c, 
+                  likes: data.likes || 0, 
+                  liked_by: data.liked_by || []
+                }
               : c
           )
         );
+        toast.success(data.message || "Comment like toggled");
       } else {
-        toast.error("Failed to like/unlike comment");
+        const errorData = await res.json();
+        toast.error(errorData.error || "Failed to like/unlike comment");
       }
-    } catch {
+    } catch (error) {
+      console.error("Toggle comment like error:", error);
       toast.error("Error toggling comment like");
     }
   };
@@ -121,6 +161,7 @@ const SinglePost = () => {
       const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (res.ok) {
         toast.success("Post deleted");
@@ -215,22 +256,30 @@ const SinglePost = () => {
             comments.map((comment) => (
               <div key={comment.id} className="bg-gray-50 border p-4 rounded">
                 <p className="text-gray-800 mb-2 whitespace-pre-wrap">{comment.content}</p>
-                <div className="flex justify-between text-xs text-gray-500">
+                <div className="flex justify-between items-center text-xs text-gray-500 mb-2">
                   <span>By User #{comment.user_id}</span>
                   <time>{formatDate(comment.created_at)}</time>
                 </div>
-                {user && (
-                  <button
-                    onClick={() => toggleLikeComment(comment.id)}
-                    className={`mt-2 px-2 py-1 text-sm rounded ${
-                      isCommentLiked(comment)
-                        ? "text-red-600 bg-red-100 border border-red-300"
-                        : "text-gray-600 bg-gray-100 border"
-                    }`}
-                  >
-                    {isCommentLiked(comment) ? "♥ Unlike" : "♡ Like"} ({comment.likes || 0})
-                  </button>
-                )}
+                
+                {/* Show like button for everyone, but only functional for logged in users */}
+                <div className="flex items-center justify-between">
+                  {user ? (
+                    <button
+                      onClick={() => toggleLikeComment(comment.id)}
+                      className={`px-3 py-1 text-sm rounded transition-colors ${
+                        isCommentLiked(comment)
+                          ? "text-red-600 bg-red-100 border border-red-300 hover:bg-red-200"
+                          : "text-gray-600 bg-gray-100 border border-gray-300 hover:bg-gray-200"
+                      } cursor-pointer`}
+                    >
+                      {isCommentLiked(comment) ? "♥ Unlike" : "♡ Like"} ({comment.likes || 0})
+                    </button>
+                  ) : (
+                    <span className="px-3 py-1 text-sm text-gray-500 bg-gray-100 border border-gray-300 rounded">
+                      ♡ Like ({comment.likes || 0})
+                    </span>
+                  )}
+                </div>
               </div>
             ))
           )}

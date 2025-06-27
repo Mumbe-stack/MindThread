@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 
 const PostContext = createContext();
-const api_url = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
+const api_url = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 export const usePosts = () => useContext(PostContext);
 

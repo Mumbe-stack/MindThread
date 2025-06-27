@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import LikeButton from "../components/LikeButton";
 
-const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const Posts = () => {
   const [posts, setPosts] = useState([]);

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import LikeButton from "./LikeButton";
+
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
+
 const CommentBox = ({ postId, onCommentSubmit }) => {
   const [content, setContent] = useState("");
 
@@ -14,6 +17,7 @@ const CommentBox = ({ postId, onCommentSubmit }) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
       },
+      credentials: "include",
       body: JSON.stringify({ post_id: postId, content })
     });
 
