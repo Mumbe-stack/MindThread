@@ -1,8 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
+# Association tables for many-to-many relationships
 comment_likes = db.Table(
     'comment_likes',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
@@ -15,24 +16,28 @@ post_likes = db.Table(
     db.Column('post_id', db.Integer, db.ForeignKey('posts.id'), primary_key=True)
 )
 
-
 class User(db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
-    is_blocked = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_blocked = db.Column(db.Boolean, default=False, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    # Relationships
     posts = db.relationship("Post", backref="user", lazy=True, cascade="all, delete-orphan")
     comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan")
+    votes = db.relationship('Vote', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 
+    # Many-to-many relationships for likes
     liked_comments = db.relationship(
         'Comment',
-        secondary='comment_likes',
+        secondary=comment_likes,
         backref=db.backref('liked_by_users', lazy='dynamic'),
         lazy='dynamic'
     )
@@ -40,7 +45,7 @@ class User(db.Model):
     liked_posts = db.relationship(
         'Post',
         secondary=post_likes,
-        backref='liked_by_users',
+        backref=db.backref('liked_by_users', lazy='dynamic'),
         lazy='dynamic'
     )
 
@@ -50,13 +55,14 @@ class User(db.Model):
             "username": self.username,
             "email": self.email,
             "is_admin": self.is_admin,
-                "is_blocked": self.is_blocked,
-            "created_at": self.created_at.isoformat()
-    }
+            "is_blocked": self.is_blocked,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
 
     def __repr__(self):
         return f"<User {self.username} (admin={self.is_admin})>"
-
 
 class Post(db.Model):
     __tablename__ = 'posts'
@@ -65,56 +71,231 @@ class Post(db.Model):
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
     tags = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    is_flagged = db.Column(db.Boolean, default=False, nullable=False)
-    is_approved = db.Column(db.Boolean, default=True, nullable=False)
+    # Approval and flagging fields
+    is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_approved = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Foreign key
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
-    comments = db.relationship('Comment', backref='post', lazy=True, cascade="all, delete-orphan")
-    votes = db.relationship('Vote', backref='post', lazy=True, cascade="all, delete-orphan")
+    # Relationships
+    comments = db.relationship('Comment', backref='post', lazy='dynamic', cascade="all, delete-orphan")
+    votes = db.relationship('Vote', backref='post', lazy='dynamic', cascade="all, delete-orphan")
+
+    # Computed properties for likes and votes
+    @property
+    def likes_count(self):
+        """Get the number of users who liked this post"""
+        return self.liked_by_users.count()
+
+    @property
+    def vote_score(self):
+        """Get the total vote score (upvotes - downvotes)"""
+        return sum(vote.value for vote in self.votes)
+
+    @property
+    def upvotes_count(self):
+        """Get the number of upvotes"""
+        return self.votes.filter_by(value=1).count()
+
+    @property
+    def downvotes_count(self):
+        """Get the number of downvotes"""
+        return self.votes.filter_by(value=-1).count()
+
+    @property
+    def total_votes(self):
+        """Get the total number of votes"""
+        return self.votes.count()
+
+    @property
+    def comments_count(self):
+        """Get the number of comments (approved only for regular users)"""
+        return self.comments.filter_by(is_approved=True).count()
+
+    def to_dict(self, include_author=True, current_user=None):
+        """Convert post to dictionary"""
+        data = {
+            'id': self.id,
+            'title': self.title,
+            'content': self.content,
+            'tags': self.tags,
+            'user_id': self.user_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'is_approved': self.is_approved,
+            'is_flagged': self.is_flagged,
+            'likes_count': self.likes_count,
+            'vote_score': self.vote_score,
+            'upvotes_count': self.upvotes_count,
+            'downvotes_count': self.downvotes_count,
+            'total_votes': self.total_votes,
+            'comments_count': self.comments_count
+        }
+        
+        if include_author and self.user:
+            data['username'] = self.user.username
+            data['author'] = {
+                'id': self.user.id,
+                'username': self.user.username
+            }
+
+        # Add user's vote if current_user is provided
+        if current_user:
+            user_vote = self.votes.filter_by(user_id=current_user.id).first()
+            data['user_vote'] = user_vote.value if user_vote else None
+            data['user_liked'] = current_user in self.liked_by_users
+        
+        return data
 
     def __repr__(self):
         return f"<Post {self.title}>"
-
 
 class Comment(db.Model):
     __tablename__ = 'comments'
 
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False)
-    parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+    # Foreign keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False, index=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
 
-    is_flagged = db.Column(db.Boolean, default=False, nullable=False)
-    is_approved = db.Column(db.Boolean, default=True)
+    # Approval and flagging fields
+    is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_approved = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
-    votes = db.relationship('Vote', backref='comment', lazy=True)
-    likes = db.Column(db.Integer, default=0, nullable=False)
+    # Relationships
+    votes = db.relationship('Vote', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
+    
+    # Self-referential relationship for replies
+    replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), lazy='dynamic')
+
+    # Remove the old likes column since we're using the relationship
+    # likes = db.Column(db.Integer, default=0, nullable=False)  # Remove this line
+
+    # Computed properties for likes and votes
+    @property
+    def likes_count(self):
+        """Get the number of users who liked this comment"""
+        return self.liked_by_users.count()
+
+    @property
+    def vote_score(self):
+        """Get the total vote score (upvotes - downvotes)"""
+        return sum(vote.value for vote in self.votes)
+
+    @property
+    def upvotes_count(self):
+        """Get the number of upvotes"""
+        return self.votes.filter_by(value=1).count()
+
+    @property
+    def downvotes_count(self):
+        """Get the number of downvotes"""
+        return self.votes.filter_by(value=-1).count()
+
+    @property
+    def total_votes(self):
+        """Get the total number of votes"""
+        return self.votes.count()
+
+    @property
+    def replies_count(self):
+        """Get the number of replies (approved only)"""
+        return self.replies.filter_by(is_approved=True).count()
+
+    def to_dict(self, include_author=True, current_user=None):
+        """Convert comment to dictionary"""
+        data = {
+            'id': self.id,
+            'content': self.content,
+            'post_id': self.post_id,
+            'user_id': self.user_id,
+            'parent_id': self.parent_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'is_approved': self.is_approved,
+            'is_flagged': self.is_flagged,
+            'likes_count': self.likes_count,
+            'vote_score': self.vote_score,
+            'upvotes_count': self.upvotes_count,
+            'downvotes_count': self.downvotes_count,
+            'total_votes': self.total_votes,
+            'replies_count': self.replies_count
+        }
+        
+        if include_author and self.user:
+            data['username'] = self.user.username
+            data['author'] = {
+                'id': self.user.id,
+                'username': self.user.username
+            }
+
+        # Add user's vote if current_user is provided
+        if current_user:
+            user_vote = self.votes.filter_by(user_id=current_user.id).first()
+            data['user_vote'] = user_vote.value if user_vote else None
+            data['user_liked'] = current_user in self.liked_by_users
+        
+        return data
 
     def __repr__(self):
-        return f"<Comment {self.content[:20]}>"
-
+        return f"<Comment {self.content[:20]}...>"
 
 class Vote(db.Model):
     __tablename__ = 'votes'
 
     id = db.Column(db.Integer, primary_key=True)
-    value = db.Column(db.Integer, nullable=False)
+    value = db.Column(db.Integer, nullable=False)  # 1 for upvote, -1 for downvote
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True)
-    comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+    # Foreign keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True, index=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
+
+    # Constraints to ensure data integrity
+    __table_args__ = (
+        # Ensure one vote per user per post/comment
+        db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_vote'),
+        db.UniqueConstraint('user_id', 'comment_id', name='unique_user_comment_vote'),
+        # Ensure valid vote values
+        db.CheckConstraint('value IN (1, -1)', name='valid_vote_value'),
+        # Ensure vote targets either post OR comment, not both
+        db.CheckConstraint(
+            '(post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)', 
+            name='vote_target_constraint'
+        )
+    )
+
+    def to_dict(self):
+        """Convert vote to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'post_id': self.post_id,
+            'comment_id': self.comment_id,
+            'value': self.value,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
 
     def __repr__(self):
-        return f"<Vote user_id={self.user_id} post_id={self.post_id} comment_id={self.comment_id}>"
-
+        target = f"Post {self.post_id}" if self.post_id else f"Comment {self.comment_id}"
+        return f"<Vote user_id={self.user_id} {target} value={self.value}>"
 
 class TokenBlocklist(db.Model):
+    __tablename__ = 'token_blocklist'
+    
     id = db.Column(db.Integer, primary_key=True)
-    jti = db.Column(db.String(36), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    jti = db.Column(db.String(36), nullable=False, unique=True, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<TokenBlocklist {self.jti}>"

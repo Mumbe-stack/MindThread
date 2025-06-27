@@ -142,18 +142,18 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      // Updated to use auth endpoints since the admin endpoints are in auth.py
-      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/auth/admin/stats`);
+      // Updated to use /api/admin/stats endpoint
+      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/admin/stats`);
       
-      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/auth/admin/stats`);
+      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       
       console.log("Stats data received:", statsData);
       setStats(statsData);
 
-      // Try to fetch activity trends from auth endpoints
+      // Try to fetch activity trends from admin endpoints
       try {
-        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/auth/admin/activity-trends`);
+        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/activity-trends`);
         
         if (trendsResponse.ok) {
           const trendsData = await handleApiResponse(trendsResponse, "Failed to fetch trends");
