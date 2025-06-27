@@ -1,12 +1,34 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from models import db, User, Post, Comment, Vote
-from .utils import block_check_required  
+from datetime import datetime
+import logging
 
-vote_bp = Blueprint("vote_bp", __name__, url_prefix="/api/votes")
+# Import utils if available, otherwise define a simple decorator
+try:
+    from .utils import block_check_required
+except ImportError:
+    def block_check_required(f):
+        """Simple decorator if utils not available"""
+        def wrapper(*args, **kwargs):
+            try:
+                current_user_id = get_jwt_identity()
+                current_user = User.query.get(current_user_id)
+                if current_user and current_user.is_blocked:
+                    return jsonify({"error": "User is blocked"}), 403
+                return f(*args, **kwargs)
+            except Exception as e:
+                return f(*args, **kwargs)
+        wrapper.__name__ = f.__name__
+        return wrapper
+
+logger = logging.getLogger(__name__)
+
+# FIXED: Remove url_prefix since app.py now handles it
+vote_bp = Blueprint("votes", __name__)
 
 
-@vote_bp.route("/post", methods=["POST"])
+@vote_bp.route("/votes/post", methods=["POST"])
 @jwt_required()
 @block_check_required 
 def vote_post():
@@ -17,12 +39,24 @@ def vote_post():
         post_id = data.get("post_id")
         value = data.get("value")
 
-        if post_id is None or value not in [-1, 1]:
-            return jsonify({"error": "post_id and value (1 or -1) are required"}), 400
+        # Enhanced validation
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
 
+        if post_id is None:
+            return jsonify({"error": "post_id is required"}), 400
+            
+        if value not in [-1, 1]:
+            return jsonify({"error": "value must be 1 (upvote) or -1 (downvote)"}), 400
+
+        # Validate post exists
         post = Post.query.get(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
+
+        # Check if post is approved
+        if not post.is_approved:
+            return jsonify({"error": "Cannot vote on unapproved post"}), 403
 
         # Check if user already voted on this post
         existing_vote = Vote.query.filter_by(user_id=user_id, post_id=post_id).first()
@@ -36,22 +70,31 @@ def vote_post():
             else:
                 # Different vote - update it
                 existing_vote.value = value 
+                existing_vote.created_at = datetime.utcnow()  # Update timestamp
                 msg = "Vote updated"
                 user_vote = value
         else:
             # New vote
-            vote = Vote(user_id=user_id, post_id=post_id, value=value)
+            vote = Vote(
+                user_id=user_id, 
+                post_id=post_id, 
+                value=value,
+                created_at=datetime.utcnow()
+            )
             db.session.add(vote)
             msg = "Vote recorded"
             user_vote = value
 
         db.session.commit()
         
-        # Get updated score
+        # Get updated score - more efficient query
         votes = Vote.query.filter_by(post_id=post_id).all()
         score = sum(v.value for v in votes)
         upvotes = len([v for v in votes if v.value == 1])
         downvotes = len([v for v in votes if v.value == -1])
+        total_votes = len(votes)
+
+        logger.info(f"User {user_id} voted {value} on post {post_id}")
 
         return jsonify({
             "success": True,
@@ -60,19 +103,29 @@ def vote_post():
             "score": score,
             "upvotes": upvotes,
             "downvotes": downvotes,
+            "total_votes": total_votes,
             "user_vote": user_vote
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error voting on post: {e}")
+        logger.error(f"Error voting on post: {e}")
         return jsonify({"error": "Failed to record vote"}), 500
 
 
-@vote_bp.route("/post/<int:post_id>/score", methods=["GET"])
+@vote_bp.route("/votes/post/<int:post_id>/score", methods=["GET"])
 def get_post_score(post_id):
     """Get voting statistics for a post"""
     try:
+        # Check if user is authenticated (optional for viewing scores)
+        current_user_id = None
+        user_vote = None
+        try:
+            verify_jwt_in_request(optional=True)
+            current_user_id = get_jwt_identity()
+        except Exception:
+            pass
+
         post = Post.query.get(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
@@ -83,20 +136,29 @@ def get_post_score(post_id):
         downvotes = len([v for v in votes if v.value == -1])
         total_votes = len(votes)
 
+        # Get user's vote if authenticated
+        if current_user_id:
+            user_vote_obj = Vote.query.filter_by(
+                user_id=current_user_id, 
+                post_id=post_id
+            ).first()
+            user_vote = user_vote_obj.value if user_vote_obj else None
+
         return jsonify({
             "post_id": post_id,
             "score": score,
             "upvotes": upvotes,
             "downvotes": downvotes,
-            "total_votes": total_votes
+            "total_votes": total_votes,
+            "user_vote": user_vote
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error getting post score: {e}")
+        logger.error(f"Error getting post score: {e}")
         return jsonify({"error": "Failed to get post score"}), 500
 
 
-@vote_bp.route("/comment", methods=["POST"])
+@vote_bp.route("/votes/comment", methods=["POST"])
 @jwt_required()
 @block_check_required  
 def vote_comment():
@@ -106,13 +168,23 @@ def vote_comment():
         user_id = get_jwt_identity()
         comment_id = data.get("comment_id")
         value = data.get("value")
+
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
        
-        if comment_id is None or value not in [-1, 1]:
-            return jsonify({"error": "Valid 'comment_id' and 'value' (1 for upvote, -1 for downvote) are required"}), 400
+        if comment_id is None:
+            return jsonify({"error": "comment_id is required"}), 400
+            
+        if value not in [-1, 1]:
+            return jsonify({"error": "value must be 1 (upvote) or -1 (downvote)"}), 400
 
         comment = Comment.query.get(comment_id)
         if not comment:
             return jsonify({"error": f"Comment with ID {comment_id} does not exist"}), 404
+
+        # Check if comment is approved
+        if not comment.is_approved:
+            return jsonify({"error": "Cannot vote on unapproved comment"}), 403
        
         existing_vote = Vote.query.filter_by(user_id=user_id, comment_id=comment_id).first()
 
@@ -125,11 +197,17 @@ def vote_comment():
             else:
                 # Different vote - update it
                 existing_vote.value = value
+                existing_vote.created_at = datetime.utcnow()
                 msg = "Vote updated"
                 user_vote = value
         else:
             # New vote
-            new_vote = Vote(user_id=user_id, comment_id=comment_id, value=value)
+            new_vote = Vote(
+                user_id=user_id, 
+                comment_id=comment_id, 
+                value=value,
+                created_at=datetime.utcnow()
+            )
             db.session.add(new_vote)
             msg = "Vote recorded"
             user_vote = value
@@ -141,6 +219,9 @@ def vote_comment():
         score = sum(v.value for v in votes)
         upvotes = len([v for v in votes if v.value == 1])
         downvotes = len([v for v in votes if v.value == -1])
+        total_votes = len(votes)
+
+        logger.info(f"User {user_id} voted {value} on comment {comment_id}")
 
         return jsonify({
             "success": True,
@@ -149,19 +230,29 @@ def vote_comment():
             "score": score,
             "upvotes": upvotes,
             "downvotes": downvotes,
+            "total_votes": total_votes,
             "user_vote": user_vote
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error voting on comment: {e}")
+        logger.error(f"Error voting on comment: {e}")
         return jsonify({"error": "Failed to record vote"}), 500
 
 
-@vote_bp.route("/comment/<int:comment_id>/score", methods=["GET"])
+@vote_bp.route("/votes/comment/<int:comment_id>/score", methods=["GET"])
 def get_comment_score(comment_id):
     """Get voting statistics for a comment"""
     try:
+        # Check if user is authenticated (optional)
+        current_user_id = None
+        user_vote = None
+        try:
+            verify_jwt_in_request(optional=True)
+            current_user_id = get_jwt_identity()
+        except Exception:
+            pass
+
         comment = Comment.query.get(comment_id)
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
@@ -172,20 +263,29 @@ def get_comment_score(comment_id):
         downvotes = len([v for v in votes if v.value == -1])
         total_votes = len(votes)
 
+        # Get user's vote if authenticated
+        if current_user_id:
+            user_vote_obj = Vote.query.filter_by(
+                user_id=current_user_id, 
+                comment_id=comment_id
+            ).first()
+            user_vote = user_vote_obj.value if user_vote_obj else None
+
         return jsonify({
             "comment_id": comment_id,
             "score": score,
             "upvotes": upvotes,
             "downvotes": downvotes,
-            "total_votes": total_votes
+            "total_votes": total_votes,
+            "user_vote": user_vote
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error getting comment score: {e}")
+        logger.error(f"Error getting comment score: {e}")
         return jsonify({"error": "Failed to get comment score"}), 500
 
 
-@vote_bp.route("/user/<int:user_id>/votes", methods=["GET"])
+@vote_bp.route("/votes/user/<int:user_id>/votes", methods=["GET"])
 @jwt_required()
 def get_user_votes(user_id):
     """Get current user's votes for posts and comments (for showing vote status)"""
@@ -211,15 +311,16 @@ def get_user_votes(user_id):
         return jsonify({
             "user_id": user_id,
             "post_votes": post_votes,
-            "comment_votes": comment_votes
+            "comment_votes": comment_votes,
+            "total_votes": len(votes)
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error getting user votes: {e}")
+        logger.error(f"Error getting user votes: {e}")
         return jsonify({"error": "Failed to get user votes"}), 500
 
 
-@vote_bp.route("/post/<int:post_id>", methods=["DELETE"])
+@vote_bp.route("/votes/post/<int:post_id>", methods=["DELETE"])
 @jwt_required()
 @block_check_required  
 def delete_vote_on_post(post_id):
@@ -241,21 +342,27 @@ def delete_vote_on_post(post_id):
         # Get updated score
         votes = Vote.query.filter_by(post_id=post_id).all()
         score = sum(v.value for v in votes)
+        upvotes = len([v for v in votes if v.value == 1])
+        downvotes = len([v for v in votes if v.value == -1])
+
+        logger.info(f"User {user_id} deleted vote on post {post_id}")
 
         return jsonify({
             "success": True,
             "message": f"Vote on Post ID {post_id} deleted successfully",
             "post_id": post_id,
-            "new_score": score
+            "score": score,
+            "upvotes": upvotes,
+            "downvotes": downvotes
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting vote on post: {e}")
+        logger.error(f"Error deleting vote on post: {e}")
         return jsonify({"error": "Failed to delete vote"}), 500
 
 
-@vote_bp.route("/comment/<int:comment_id>", methods=["DELETE"])
+@vote_bp.route("/votes/comment/<int:comment_id>", methods=["DELETE"])
 @jwt_required()
 @block_check_required 
 def delete_comment_vote(comment_id):
@@ -277,22 +384,28 @@ def delete_comment_vote(comment_id):
         # Get updated score
         votes = Vote.query.filter_by(comment_id=comment_id).all()
         score = sum(v.value for v in votes)
+        upvotes = len([v for v in votes if v.value == 1])
+        downvotes = len([v for v in votes if v.value == -1])
+
+        logger.info(f"User {user_id} deleted vote on comment {comment_id}")
 
         return jsonify({
             "success": True,
             "message": "Vote on comment removed",
             "comment_id": comment_id,
-            "new_score": score
+            "score": score,
+            "upvotes": upvotes,
+            "downvotes": downvotes
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting comment vote: {e}")
+        logger.error(f"Error deleting comment vote: {e}")
         return jsonify({"error": "Failed to delete vote"}), 500
 
 
 # ADMIN SUPERPOWER ROUTES
-@vote_bp.route("/admin/post/<int:post_id>/votes", methods=["GET"])
+@vote_bp.route("/votes/admin/post/<int:post_id>/votes", methods=["GET"])
 @jwt_required()
 def admin_get_post_votes(post_id):
     """Admin: Get all votes on a specific post with user details"""
@@ -314,7 +427,7 @@ def admin_get_post_votes(post_id):
                 "value": vote.value,
                 "user_id": vote.user_id,
                 "username": vote.user.username,
-                "created_at": vote.created_at.isoformat() if hasattr(vote, 'created_at') else None
+                "created_at": vote.created_at.isoformat() if hasattr(vote, 'created_at') and vote.created_at else None
             })
 
         return jsonify({
@@ -323,15 +436,16 @@ def admin_get_post_votes(post_id):
             "votes": vote_details,
             "total_votes": len(vote_details),
             "upvotes": len([v for v in votes if v.value == 1]),
-            "downvotes": len([v for v in votes if v.value == -1])
+            "downvotes": len([v for v in votes if v.value == -1]),
+            "score": sum(v.value for v in votes)
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error getting post votes (admin): {e}")
+        logger.error(f"Error getting post votes (admin): {e}")
         return jsonify({"error": "Failed to get post votes"}), 500
 
 
-@vote_bp.route("/admin/vote/<int:vote_id>", methods=["DELETE"])
+@vote_bp.route("/votes/admin/vote/<int:vote_id>", methods=["DELETE"])
 @jwt_required()
 def admin_delete_vote(vote_id):
     """Admin: Delete any vote"""
@@ -344,21 +458,32 @@ def admin_delete_vote(vote_id):
         if not vote:
             return jsonify({"error": "Vote not found"}), 404
 
+        vote_info = {
+            "id": vote.id,
+            "user_id": vote.user_id,
+            "post_id": vote.post_id,
+            "comment_id": vote.comment_id,
+            "value": vote.value
+        }
+
         db.session.delete(vote)
         db.session.commit()
 
+        logger.info(f"Admin {current_user.id} deleted vote {vote_id}")
+
         return jsonify({
             "success": True,
-            "message": "Vote deleted by admin"
+            "message": "Vote deleted by admin",
+            "deleted_vote": vote_info
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting vote (admin): {e}")
+        logger.error(f"Error deleting vote (admin): {e}")
         return jsonify({"error": "Failed to delete vote"}), 500
 
 
-@vote_bp.route("/admin/reset/post/<int:post_id>", methods=["DELETE"])
+@vote_bp.route("/votes/admin/reset/post/<int:post_id>", methods=["DELETE"])
 @jwt_required()
 def admin_reset_post_votes(post_id):
     """Admin: Delete all votes on a specific post"""
@@ -379,6 +504,8 @@ def admin_reset_post_votes(post_id):
 
         db.session.commit()
 
+        logger.info(f"Admin {current_user.id} reset all votes for post {post_id}")
+
         return jsonify({
             "success": True,
             "message": f"All votes reset for post '{post.title}'",
@@ -388,17 +515,57 @@ def admin_reset_post_votes(post_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error resetting post votes (admin): {e}")
+        logger.error(f"Error resetting post votes (admin): {e}")
         return jsonify({"error": "Failed to reset post votes"}), 500
 
 
-def to_dict(self):
+@vote_bp.route("/votes/admin/comment/<int:comment_id>/votes", methods=["GET"])
+@jwt_required()
+def admin_get_comment_votes(comment_id):
+    """Admin: Get all votes on a specific comment with user details"""
+    try:
+        current_user = User.query.get(get_jwt_identity())
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+
+        votes = Vote.query.filter_by(comment_id=comment_id).join(User).all()
+        
+        vote_details = []
+        for vote in votes:
+            vote_details.append({
+                "id": vote.id,
+                "value": vote.value,
+                "user_id": vote.user_id,
+                "username": vote.user.username,
+                "created_at": vote.created_at.isoformat() if hasattr(vote, 'created_at') and vote.created_at else None
+            })
+
+        return jsonify({
+            "comment_id": comment_id,
+            "comment_content": comment.content[:100] + "..." if len(comment.content) > 100 else comment.content,
+            "votes": vote_details,
+            "total_votes": len(vote_details),
+            "upvotes": len([v for v in votes if v.value == 1]),
+            "downvotes": len([v for v in votes if v.value == -1]),
+            "score": sum(v.value for v in votes)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting comment votes (admin): {e}")
+        return jsonify({"error": "Failed to get comment votes"}), 500
+
+
+def serialize_vote(vote):
     """Helper method for Vote model serialization"""
     return {
-        "id": self.id,
-        "value": self.value,
-        "user_id": self.user_id,
-        "post_id": self.post_id,
-        "comment_id": self.comment_id,
-        "created_at": self.created_at.isoformat() if hasattr(self, 'created_at') else None
+        "id": vote.id,
+        "value": vote.value,
+        "user_id": vote.user_id,
+        "post_id": vote.post_id,
+        "comment_id": vote.comment_id,
+        "created_at": vote.created_at.isoformat() if hasattr(vote, 'created_at') and vote.created_at else None
     }

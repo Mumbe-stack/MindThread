@@ -28,7 +28,7 @@ CORS(
                 "http://127.0.0.1:5173",  # Added for local development
                 "http://127.0.0.1:3000"   # Added for local development
             ],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": [
                 "Content-Type", 
                 "Authorization", 
@@ -40,7 +40,7 @@ CORS(
     },
     supports_credentials=True,
     allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 )
 
 # Database Configuration
@@ -259,15 +259,17 @@ def service_unavailable(error):
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# Register Blueprints with enhanced error handling
+# CORRECTED: Register Blueprints with proper URL prefixes to match frontend expectations
 try:
-    app.register_blueprint(post_bp, url_prefix="/api/posts")
-    app.register_blueprint(comment_bp, url_prefix="/api/comments")
-    app.register_blueprint(user_bp, url_prefix="/api/users")
-    app.register_blueprint(vote_bp, url_prefix="/api/votes")
-    app.register_blueprint(auth_bp, url_prefix="/api/auth")
-    app.register_blueprint(admin_bp, url_prefix="/api/admin")
-    app.register_blueprint(home_bp)
+    # Frontend expects: /api/posts, /api/comments, etc.
+    # So we register blueprints with /api prefix and let each blueprint define its routes
+    app.register_blueprint(post_bp, url_prefix="/api")      # post_bp should define routes like @bp.route('/posts')
+    app.register_blueprint(comment_bp, url_prefix="/api")   # comment_bp should define routes like @bp.route('/comments')
+    app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
+    app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
+    app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
+    app.register_blueprint(admin_bp, url_prefix="/api")     # admin_bp should define routes like @bp.route('/admin')
+    app.register_blueprint(home_bp)                         # home_bp for root routes
     logger.info("All blueprints registered successfully")
 except Exception as e:
     logger.error(f"Error registering blueprints: {e}")
@@ -359,7 +361,7 @@ with app.app_context():
         create_upload_dirs()
         logger.info("✅ Upload directories created successfully")
         
-        # Log registered routes
+        # Log registered routes for debugging
         logger.info("✅ API Routes Registration:")
         relevant_routes = []
         for rule in app.url_map.iter_rules():
@@ -370,20 +372,24 @@ with app.app_context():
         for route in sorted(relevant_routes):
             logger.info(route)
         
-        # Check critical routes
+        # Check critical routes that frontend expects
         logger.info("🔍 Critical Routes Check:")
         critical_routes = [
             '/api/auth/login',
             '/api/auth/register', 
             '/api/posts',
+            '/api/posts/<',         # For dynamic routes like /api/posts/<id>
             '/api/comments',
             '/api/users',
+            '/api/votes/post',
             '/api/admin/stats',
             '/api/health'
         ]
         
+        all_routes = [rule.rule for rule in app.url_map.iter_rules()]
+        
         for route in critical_routes:
-            found = any(route in r for r in relevant_routes)
+            found = any(route in r for r in all_routes)
             status = '✅ Found' if found else '❌ Missing'
             logger.info(f"   {status}: {route}")
         
