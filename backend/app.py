@@ -12,14 +12,15 @@ app = Flask(__name__)
 
 # Enhanced CORS Configuration
 CORS(
-    app,
-    resources={r"/api/*": {
-        "origins": [
-            "https://mindthread-1.onrender.com",
-               
-        ]
-    }},
-    supports_credentials=True
+  app,
+  resources={ r"/api/*": {
+    "origins": [
+      "https://mindthread-1.onrender.com",              # your API host
+      "https://mindthreadbloggingapp.netlify.app",      # your Netlify front-end
+      "http://localhost:5173"                           # if you still want local dev too
+    ]
+  }},
+  supports_credentials=True
 )
 
 # Database Configuration
