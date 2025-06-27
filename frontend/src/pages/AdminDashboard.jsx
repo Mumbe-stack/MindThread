@@ -142,17 +142,18 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/admin/stats`);
+      // Updated to use auth endpoints since the admin endpoints are in auth.py
+      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/auth/admin/stats`);
       
-      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
+      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/auth/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       
       console.log("Stats data received:", statsData);
       setStats(statsData);
 
-      // Try to fetch activity trends (optional)
+      // Try to fetch activity trends from auth endpoints
       try {
-        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/activity-trends`);
+        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/auth/admin/activity-trends`);
         
         if (trendsResponse.ok) {
           const trendsData = await handleApiResponse(trendsResponse, "Failed to fetch trends");
@@ -682,19 +683,19 @@ const AdminDashboard = () => {
                   {loading ? "Loading users..." : "No users found"}
                 </div>
               ) : (
-                filteredUsers.map((user) => (
-                  <div key={user.id} className="px-6 py-4 hover:bg-gray-50">
+                filteredUsers.map((userItem) => (
+                  <div key={userItem.id} className="px-6 py-4 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h5 className="font-medium text-gray-900">{user.username}</h5>
-                        <p className="text-sm text-gray-600">{user.email}</p>
+                        <h5 className="font-medium text-gray-900">{userItem.username}</h5>
+                        <p className="text-sm text-gray-600">{userItem.email}</p>
                         <div className="flex gap-2 mt-1">
-                          {user.is_admin && (
+                          {userItem.is_admin && (
                             <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
                               Admin
                             </span>
                           )}
-                          {user.is_blocked && (
+                          {userItem.is_blocked && (
                             <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">
                               Blocked
                             </span>
@@ -703,17 +704,17 @@ const AdminDashboard = () => {
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleUserAction(user.id, user.is_blocked ? "unblock" : "block")}
+                          onClick={() => handleUserAction(userItem.id, userItem.is_blocked ? "unblock" : "block")}
                           className={`px-3 py-1 text-xs rounded ${
-                            user.is_blocked
+                            userItem.is_blocked
                               ? "bg-green-100 text-green-800 hover:bg-green-200"
                               : "bg-red-100 text-red-800 hover:bg-red-200"
                           }`}
                         >
-                          {user.is_blocked ? "Unblock" : "Block"}
+                          {userItem.is_blocked ? "Unblock" : "Block"}
                         </button>
                         <button
-                          onClick={() => handleUserAction(user.id, "delete")}
+                          onClick={() => handleUserAction(userItem.id, "delete")}
                           className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
                         >
                           Delete

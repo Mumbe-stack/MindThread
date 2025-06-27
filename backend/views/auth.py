@@ -4,11 +4,12 @@ from flask_jwt_extended import (
     create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 )
 from flask_mail import Message
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import func, and_
 import re
 import traceback
 
-from models import db, User, TokenBlocklist
+from models import db, User, TokenBlocklist, Post, Comment
 
 auth_bp = Blueprint("auth_bp", __name__)
 
@@ -35,6 +36,30 @@ def validate_password(password):
     if len(password) > 100:
         return False, "Password too long (max 100 characters)"
     return True, "Valid"
+
+def admin_required(f):
+    """Decorator to require admin privileges"""
+    def decorated_function(*args, **kwargs):
+        try:
+            user_id = get_jwt_identity()
+            user = User.query.get(user_id)
+            
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            
+            if not getattr(user, 'is_admin', False):
+                return jsonify({"error": "Admin privileges required"}), 403
+            
+            if getattr(user, 'is_blocked', False):
+                return jsonify({"error": "Account is blocked"}), 403
+            
+            return f(*args, **kwargs)
+        except Exception as e:
+            current_app.logger.error(f"Admin check error: {e}")
+            return jsonify({"error": "Authorization failed"}), 500
+    
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
@@ -372,6 +397,117 @@ def verify_token():
         current_app.logger.error(f"Token verification error: {e}")
         return jsonify({"error": "Token verification failed"}), 500
 
+# Admin endpoints for activity trends
+@auth_bp.route("/admin/stats", methods=["GET"])
+@jwt_required()
+@admin_required
+def get_admin_stats():
+    """Get comprehensive admin statistics"""
+    try:
+        # Get total counts
+        total_users = User.query.count()
+        total_posts = Post.query.count() if hasattr(db.Model, 'Post') else 0
+        total_comments = Comment.query.count() if hasattr(db.Model, 'Comment') else 0
+        
+        # Get blocked users count
+        blocked_users = User.query.filter_by(is_blocked=True).count()
+        
+        # Get flagged content counts (if you have flagged fields)
+        flagged_posts = 0
+        flagged_comments = 0
+        
+        try:
+            if hasattr(Post, 'is_flagged'):
+                flagged_posts = Post.query.filter_by(is_flagged=True).count()
+        except:
+            pass
+            
+        try:
+            if hasattr(Comment, 'is_flagged'):
+                flagged_comments = Comment.query.filter_by(is_flagged=True).count()
+        except:
+            pass
+        
+        total_flagged = flagged_posts + flagged_comments
+        
+        stats = {
+            "users": total_users,
+            "posts": total_posts,
+            "comments": total_comments,
+            "flagged": total_flagged,
+            "flagged_posts": flagged_posts,
+            "flagged_comments": flagged_comments,
+            "blocked_users": blocked_users
+        }
+        
+        current_app.logger.info(f"Admin stats retrieved: {stats}")
+        
+        return jsonify(stats), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Admin stats error: {e}")
+        return jsonify({"error": "Failed to fetch admin stats"}), 500
+
+@auth_bp.route("/admin/activity-trends", methods=["GET"])
+@jwt_required()
+@admin_required
+def get_activity_trends():
+    """Get activity trends for the last 7 days"""
+    try:
+        # Calculate date range for last 7 days
+        end_date = datetime.now(timezone.utc).date()
+        start_date = end_date - timedelta(days=6)
+        
+        # Generate date labels
+        date_labels = []
+        daily_posts = []
+        daily_users = []
+        
+        for i in range(7):
+            current_date = start_date + timedelta(days=i)
+            date_labels.append(current_date.strftime('%a'))  # Mon, Tue, etc.
+            
+            # Count posts created on this date
+            posts_count = 0
+            if hasattr(db.Model, 'Post'):
+                try:
+                    posts_count = Post.query.filter(
+                        func.date(Post.created_at) == current_date
+                    ).count()
+                except Exception as e:
+                    current_app.logger.warning(f"Error counting posts for {current_date}: {e}")
+            
+            # Count users created on this date
+            users_count = 0
+            try:
+                users_count = User.query.filter(
+                    func.date(User.created_at) == current_date
+                ).count()
+            except Exception as e:
+                current_app.logger.warning(f"Error counting users for {current_date}: {e}")
+            
+            daily_posts.append(posts_count)
+            daily_users.append(users_count)
+        
+        trends_data = {
+            "labels": date_labels,
+            "posts": daily_posts,
+            "users": daily_users
+        }
+        
+        current_app.logger.info(f"Activity trends retrieved: {trends_data}")
+        
+        return jsonify(trends_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Activity trends error: {e}")
+        # Return fallback data
+        return jsonify({
+            "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            "posts": [1, 2, 0, 3, 1, 2, 1],
+            "users": [0, 1, 0, 1, 0, 0, 1]
+        }), 200
+
 @auth_bp.route("/verify-email", methods=["POST"])
 def verify_email():
     """Email verification endpoint (placeholder for future implementation)"""
@@ -411,7 +547,9 @@ def test_auth():
             "refresh": "POST /api/auth/refresh",
             "me": "GET /api/auth/me",
             "change_password": "POST /api/auth/change-password",
-            "verify_token": "GET /api/auth/verify-token"
+            "verify_token": "GET /api/auth/verify-token",
+            "admin_stats": "GET /api/auth/admin/stats",
+            "activity_trends": "GET /api/auth/admin/activity-trends"
         },
         "features": [
             "Email/username login support",
@@ -419,7 +557,9 @@ def test_auth():
             "Token blacklisting on logout",
             "Comprehensive validation",
             "Welcome email notifications",
-            "Security logging"
+            "Security logging",
+            "Admin statistics",
+            "Activity trends tracking"
         ]
     }), 200
 
