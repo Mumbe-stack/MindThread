@@ -1,113 +1,43 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import CommentBox from "../components/CommentBox";
-import toast from "react-hot-toast";
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
-const SinglePost = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+const LikeButton = ({ 
+  itemType = 'post', // 'post' or 'comment'
+  itemId, 
+  initialLikes = 0, 
+  initialLikedBy = [], 
+  onLikeChange,
+  size = 'normal', // 'small', 'normal', 'large'
+  variant = 'default' // 'default', 'minimal', 'outlined'
+}) => {
   const { user, token } = useAuth();
+  const [likes, setLikes] = useState(initialLikes);
+  const [likedBy, setLikedBy] = useState(initialLikedBy);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [post, setPost] = useState(null);
-  const [comments, setComments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [commentsLoading, setCommentsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const isLiked = user && likedBy.includes(user.id);
 
-  const fetchPost = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch post");
-      const data = await res.json();
-      setPost(data);
-    } catch (err) {
-      toast.error("Could not load post");
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchComments = async () => {
-    try {
-      setCommentsLoading(true);
-      const headers = {};
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-      
-      const res = await fetch(`${VITE_API_URL}/api/comments?post_id=${id}`, {
-        headers,
-        credentials: "include",
-      });
-      
-      if (!res.ok) {
-        throw new Error(`Failed to fetch comments: ${res.status}`);
-      }
-      
-      const data = await res.json();
-      
-    } catch (err) {
-      
-      toast.error("Failed to load comments");
-      setComments([]);
-    } finally {
-      setCommentsLoading(false);
-    }
-  };
-
-  const refreshComments = async () => {
-     
-    await fetchComments();
-  };
-
-  useEffect(() => {
-    if (id) {
-      fetchPost();
-      fetchComments();
-    }
-  }, [id]);
-
-  const toggleLikePost = async () => {
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/posts/${id}/like`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPost((prev) => ({
-          ...prev,
-          likes: data.likes,
-          liked_by: data.liked_by,
-        }));
-      } else {
-        toast.error("Failed to like/unlike post");
-      }
-    } catch {
-      toast.error("Server error while toggling post like");
-    }
-  };
-
-  const toggleLikeComment = async (commentId) => {
+  const handleToggleLike = async () => {
     if (!user || !token) {
-      toast.error("Please log in to like comments");
+      toast.error(`Please log in to like ${itemType}s`);
       return;
     }
 
+    if (isLoading) return; // Prevent double clicks
+
+    setIsLoading(true);
+
     try {
-      const res = await fetch(`${VITE_API_URL}/api/comments/${commentId}/like`, {
+      const endpoint = itemType === 'post' 
+        ? `${VITE_API_URL}/api/posts/${itemId}/like`
+        : `${VITE_API_URL}/api/comments/${itemId}/like`;
+
+      console.log(`Attempting to like ${itemType}:`, itemId);
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -116,165 +46,146 @@ const SinglePost = () => {
         credentials: "include",
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setComments((prev) =>
-          prev.map((c) =>
-            c.id === commentId
-              ? { 
-                  ...c, 
-                  likes: data.likes || 0, 
-                  liked_by: data.liked_by || []
-                }
-              : c
-          )
-        );
-        toast.success(data.message || "Comment like toggled");
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Failed to like/unlike comment");
+      console.log(`${itemType} like response status:`, res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`${itemType} like error:`, errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText };
+        }
+        
+        // Handle specific error cases
+        if (res.status === 404) {
+          toast.error(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} not found`);
+        } else if (res.status === 401) {
+          toast.error("Please log in again");
+        } else if (res.status === 403) {
+          toast.error("Access denied");
+        } else {
+          toast.error(errorData.error || `Failed to like ${itemType}`);
+        }
+        return;
       }
-    } catch (error) {
+
+      const data = await res.json();
+      console.log(`${itemType} like success:`, data);
+
+      // Update local state
+      const newLikes = data.likes || 0;
+      const newLikedBy = data.liked_by || [];
       
-      toast.error("Error toggling comment like");
-    }
-  };
+      setLikes(newLikes);
+      setLikedBy(newLikedBy);
 
-  const isPostLiked = () => post?.liked_by?.includes(user?.id);
-  const isCommentLiked = (comment) => comment?.liked_by?.includes(user?.id);
-
-  const handleDeletePost = async () => {
-    if (!user || post.user_id !== user.id) {
-      toast.error("You can only delete your own posts");
-      return;
-    }
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
-
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
-      });
-      if (res.ok) {
-        toast.success("Post deleted");
-        navigate("/");
-      } else {
-        toast.error("Delete failed");
+      // Call parent callback if provided
+      if (onLikeChange) {
+        onLikeChange({
+          itemId,
+          itemType,
+          likes: newLikes,
+          liked_by: newLikedBy,
+          isLiked: newLikedBy.includes(user.id)
+        });
       }
-    } catch {
-      toast.error("Server error on delete");
+
+      // Show success message
+      const action = newLikedBy.includes(user.id) ? 'liked' : 'unliked';
+      toast.success(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} ${action}!`);
+
+    } catch (error) {
+      console.error(`Error toggling ${itemType} like:`, error);
+      toast.error(`Network error while liking ${itemType}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const formatDate = (date) =>
-    new Date(date).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  // Size variants
+  const sizeClasses = {
+    small: {
+      button: 'px-2 py-1 text-xs',
+      icon: 'text-sm',
+      text: 'text-xs'
+    },
+    normal: {
+      button: 'px-3 py-1 text-sm',
+      icon: 'text-base',
+      text: 'text-sm'
+    },
+    large: {
+      button: 'px-4 py-2 text-base',
+      icon: 'text-lg',
+      text: 'text-base'
+    }
+  };
 
-  if (loading) return <p className="text-center p-6">Loading...</p>;
-  if (error) return <p className="text-center text-red-600 p-6">{error}</p>;
-  if (!post) return <p className="text-center p-6">Post not found</p>;
+  // Style variants
+  const getVariantClasses = () => {
+    const base = 'inline-flex items-center gap-1 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    
+    if (variant === 'minimal') {
+      return `${base} hover:bg-gray-100 ${isLiked ? 'text-red-600' : 'text-gray-600'}`;
+    }
+    
+    if (variant === 'outlined') {
+      return `${base} border ${
+        isLiked 
+          ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100' 
+          : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+      }`;
+    }
+    
+    // Default variant
+    return `${base} ${
+      isLiked 
+        ? 'bg-red-100 text-red-600 border border-red-300 hover:bg-red-200' 
+        : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+    }`;
+  };
+
+  const currentSize = sizeClasses[size];
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <Link to="/" className="text-indigo-600 hover:underline mb-4 inline-block">
-        ← Back
-      </Link>
-
-      <article className="bg-white border p-6 rounded-lg shadow-sm">
-        <header className="mb-4">
-          <h1 className="text-3xl font-bold">{post.title}</h1>
-          <p className="text-sm text-gray-500">
-            By User #{post.user_id} • {formatDate(post.created_at)}
-          </p>
-        </header>
-
-        <p className="mb-4 text-gray-800 whitespace-pre-wrap">{post.content}</p>
-
-        <div className="flex items-center gap-4">
-          {user && (
-            <button
-              onClick={toggleLikePost}
-              className={`px-3 py-1 rounded ${
-                isPostLiked()
-                  ? "bg-red-100 text-red-600 border border-red-300"
-                  : "bg-gray-100 text-gray-700 border"
-              }`}
-            >
-              {isPostLiked() ? "♥ Unlike" : "♡ Like"} ({post.likes || 0})
-            </button>
-          )}
-
-          {user?.id === post.user_id && (
-            <>
-              <Link
-                to={`/posts/${post.id}/edit`}
-                className="bg-blue-600 text-white px-3 py-1 rounded"
-              >
-                Edit
-              </Link>
-              <button
-                onClick={handleDeletePost}
-                className="bg-red-600 text-white px-3 py-1 rounded"
-              >
-                Delete
-              </button>
-            </>
-          )}
-        </div>
-      </article>
-
-      <section className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Comments ({comments.length})</h2>
-
-        {user ? (
-          <CommentBox postId={post.id} onCommentSubmit={refreshComments} />
-        ) : (
-          <p className="text-center text-gray-500">
-            Please <Link to="/login" className="text-indigo-600">log in</Link> to comment
-          </p>
-        )}
-
-        <div className="mt-6 space-y-4">
-          {commentsLoading ? (
-            <p className="text-gray-500">Loading comments...</p>
-          ) : comments.length === 0 ? (
-            <p className="text-gray-400">No comments yet.</p>
+    <div className="flex items-center gap-2">
+      {user ? (
+        <button
+          onClick={handleToggleLike}
+          disabled={isLoading}
+          className={`${getVariantClasses()} ${currentSize.button}`}
+          aria-label={`${isLiked ? 'Unlike' : 'Like'} this ${itemType}`}
+        >
+          {isLoading ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
           ) : (
-            comments.map((comment) => (
-              <div key={comment.id} className="bg-gray-50 border p-4 rounded">
-                <p className="text-gray-800 mb-2 whitespace-pre-wrap">{comment.content}</p>
-                <div className="flex justify-between items-center text-xs text-gray-500 mb-2">
-                  <span>By User #{comment.user_id}</span>
-                  <time>{formatDate(comment.created_at)}</time>
-                </div>
-                {user && (
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => toggleLikeComment(comment.id)}
-                      disabled={!user}
-                      className={`px-3 py-1 text-sm rounded transition-colors ${
-                        isCommentLiked(comment)
-                          ? "text-red-600 bg-red-100 border border-red-300 hover:bg-red-200"
-                          : "text-gray-600 bg-gray-100 border border-gray-300 hover:bg-gray-200"
-                      } ${!user ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                    >
-                      {isCommentLiked(comment) ? "♥ Unlike" : "♡ Like"} ({comment.likes || 0})
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
+            <span className={currentSize.icon}>
+              {isLiked ? "♥" : "♡"}
+            </span>
+          )}
+          <span className={currentSize.text}>
+            {isLiked ? "Unlike" : "Like"}
+          </span>
+          <span className={`font-semibold ${currentSize.text}`}>
+            ({likes})
+          </span>
+        </button>
+      ) : (
+        <div className={`flex items-center gap-1 text-gray-500 ${currentSize.text}`}>
+          <span className={currentSize.icon}>♡</span>
+          <span>({likes})</span>
+          {likes > 0 && size !== 'small' && (
+            <span className="text-xs">
+              • <span className="text-indigo-600 cursor-pointer hover:underline">Login to like</span>
+            </span>
           )}
         </div>
-      </section>
+      )}
     </div>
   );
 };
 
-export default SinglePost;
+export default LikeButton;

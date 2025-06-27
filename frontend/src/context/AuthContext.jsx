@@ -7,148 +7,280 @@ const api_url = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.c
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); 
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
   const navigate = useNavigate();
-  const [token, setToken] = useState(localStorage.getItem("token"));
 
+  // Initialize authentication state from localStorage
   useEffect(() => {
-    if (token) {
-      fetchCurrentUser();
-    } else {
-      setLoading(false); 
-    }
-  }, [token]);
+    const initializeAuth = async () => {
+      try {
+        const storedToken = localStorage.getItem("access_token");
+        const storedRefreshToken = localStorage.getItem("refresh_token");
+        const storedUser = localStorage.getItem("user");
 
-  const fetchCurrentUser = async () => {
-    try {
-      setLoading(true);
-      
+        if (storedToken) {
+          setToken(storedToken);
+          setRefreshToken(storedRefreshToken);
+          
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              setUser(parsedUser);
+            } catch (parseError) {
+              console.error("Error parsing stored user:", parseError);
+              localStorage.removeItem("user");
+            }
+          }
+          
+          // Verify token validity
+          await verifyCurrentUser(storedToken);
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+        clearAuthData();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  const clearAuthData = () => {
+    setUser(null);
+    setToken(null);
+    setRefreshToken(null);
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user");
+  };
+
+  const storeAuthData = (authData) => {
+    const { access_token, refresh_token, user: userData } = authData;
     
+    setToken(access_token);
+    setUser(userData);
+    
+    localStorage.setItem("access_token", access_token);
+    localStorage.setItem("user", JSON.stringify(userData));
+    
+    if (refresh_token) {
+      setRefreshToken(refresh_token);
+      localStorage.setItem("refresh_token", refresh_token);
+    }
+  };
+
+  const refreshAccessToken = async () => {
+    try {
+      const storedRefreshToken = localStorage.getItem("refresh_token");
+      if (!storedRefreshToken) {
+        throw new Error("No refresh token available");
+      }
+
+      const res = await fetch(`${api_url}/api/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${storedRefreshToken}`,
+        },
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        throw new Error("Token refresh failed");
+      }
+
+      const data = await res.json();
+      
+      if (data.success && data.access_token) {
+        setToken(data.access_token);
+        localStorage.setItem("access_token", data.access_token);
+        return data.access_token;
+      } else {
+        throw new Error("Invalid refresh response");
+      }
+    } catch (error) {
+      console.error("Token refresh error:", error);
+      clearAuthData();
+      toast.error("Session expired. Please login again.");
+      navigate("/login");
+      throw error;
+    }
+  };
+
+  const verifyCurrentUser = async (tokenToVerify = token) => {
+    if (!tokenToVerify) return false;
+
+    try {
       const res = await fetch(`${api_url}/api/auth/me`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${tokenToVerify}`,
         },
+        credentials: "include",
       });
 
       if (res.ok) {
         const data = await res.json();
-        setUser({
-          id: data.id,
-          username: data.username,
-          email: data.email,
-          is_admin: data.is_admin,
-          is_blocked: data.is_blocked, 
-          created_at: data.created_at,
-        });
-      } else {
-        
-        localStorage.removeItem("token");
-        setToken(null);
-        setUser(null);
+        if (data.success && data.user) {
+          setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
+          return true;
+        }
+      } else if (res.status === 401) {
+        // Token expired, try to refresh
+        try {
+          const newToken = await refreshAccessToken();
+          return await verifyCurrentUser(newToken);
+        } catch (refreshError) {
+          return false;
+        }
       }
-    } catch (error) {
-      console.error("Failed to fetch user data:", error);
-      toast.error("Failed to fetch user data");
       
-      localStorage.removeItem("token");
-      setToken(null);
-      setUser(null);
-    } finally {
-      setLoading(false);
+      return false;
+    } catch (error) {
+      console.error("User verification error:", error);
+      return false;
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (credentials) => {
     try {
       const res = await fetch(`${api_url}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        credentials: "include",
+        body: JSON.stringify(credentials),
       });
 
       const data = await res.json();
 
-      if (res.ok) {
-        localStorage.setItem("token", data.access_token);
-        setToken(data.access_token);
-        setUser({
+      if (res.ok && data.success) {
+        // Handle both old and new response formats
+        const userData = data.user || {
           id: data.user_id,
           username: data.username,
-          email: data.email, 
+          email: data.email,
           is_admin: data.is_admin,
+        };
+
+        storeAuthData({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          user: userData
         });
-        toast.success("Login successful");
+
+        toast.success("Login successful!");
         navigate("/");
-        return true;
+        return { success: true, user: userData };
       } else {
-        toast.error(data.error || "Invalid credentials");
-        return false;
+        // Handle specific error cases
+        let errorMessage = "Login failed";
+        
+        if (res.status === 401) {
+          errorMessage = data.error || "Invalid credentials";
+        } else if (res.status === 403) {
+          errorMessage = data.error || "Account is blocked or inactive";
+        } else if (res.status === 400) {
+          errorMessage = data.error || "Invalid input data";
+        } else {
+          errorMessage = data.error || "Login failed";
+        }
+        
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error("Login error:", error);
-      toast.error("Network error during login");
-      return false;
+      const errorMessage = "Network error during login";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
-  const register = async (form) => {
+  const register = async (userData) => {
     try {
       const res = await fetch(`${api_url}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        credentials: "include",
+        body: JSON.stringify(userData),
       });
 
       const data = await res.json();
 
-      if (res.ok) {
-        toast.success("Account created successfully");
-        navigate("/login");
-        return true;
+      if (res.ok && data.success) {
+        // Handle auto-login after registration if tokens are provided
+        if (data.access_token) {
+          const newUser = data.user || {
+            id: data.user_id,
+            username: userData.username,
+            email: userData.email,
+            is_admin: false,
+          };
+
+          storeAuthData({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            user: newUser
+          });
+
+          toast.success("Registration successful! You are now logged in.");
+          navigate("/");
+        } else {
+          toast.success("Account created successfully! Please login.");
+          navigate("/login");
+        }
+        
+        return { success: true };
       } else {
-        toast.error(data.error || "Registration failed");
-        return false;
+        // Handle specific error cases
+        let errorMessage = "Registration failed";
+        
+        if (res.status === 409) {
+          errorMessage = data.error || "User already exists";
+        } else if (res.status === 400) {
+          errorMessage = data.error || "Invalid input data";
+        } else {
+          errorMessage = data.error || "Registration failed";
+        }
+        
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error("Registration error:", error);
-      toast.error("Network error during registration");
-      return false;
+      const errorMessage = "Network error during registration";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   const logout = async () => {
     try {
-     
-      const res = await fetch(`${api_url}/api/auth/logout`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      
-      localStorage.removeItem("token");
-      setToken(null);
-      setUser(null);
-      
-      if (res.ok) {
-        toast.success("Logged out successfully");
-      } else {
-        toast.success("Logged out locally"); 
+      // Call logout endpoint if token exists
+      if (token) {
+        await fetch(`${api_url}/api/auth/logout`, {
+          method: "POST", // Changed from DELETE to POST to match backend
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          credentials: "include",
+        });
       }
-      
-      navigate("/");
     } catch (error) {
-      console.error("Logout error:", error);
-      
-      localStorage.removeItem("token");
-      setToken(null);
-      setUser(null);
-      toast.success("Logged out locally");
+      console.error("Logout API error:", error);
+      // Continue with local logout even if API call fails
+    } finally {
+      clearAuthData();
+      toast.success("Logged out successfully");
       navigate("/");
     }
   };
@@ -159,103 +291,186 @@ export const AuthProvider = ({ children }) => {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Authorization": `Bearer ${token}`,
         },
+        credentials: "include",
         body: JSON.stringify(updates),
       });
 
       if (res.ok) {
-        toast.success("Profile updated");
-        await fetchCurrentUser(); 
-        return true;
-      } else {
         const data = await res.json();
-        toast.error(data.error || "Update failed");
-        return false;
+        toast.success("Profile updated successfully");
+        
+        // Refresh user data
+        await verifyCurrentUser();
+        return { success: true, data };
+      } else {
+        const errorData = await res.json();
+        const errorMessage = errorData.error || "Update failed";
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error("Update profile error:", error);
-      toast.error("Error updating profile");
-      return false;
+      const errorMessage = "Error updating profile";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   const deleteUser = async () => {
     try {
-      
       const res = await fetch(`${api_url}/api/users/me`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
+        credentials: "include",
       });
 
       if (res.ok) {
-        toast.success("Account deleted");
-        
-        localStorage.removeItem("token");
-        setToken(null);
-        setUser(null);
+        toast.success("Account deleted successfully");
+        clearAuthData();
         navigate("/");
-        return true;
+        return { success: true };
       } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to delete account");
-        return false;
+        const errorData = await res.json();
+        const errorMessage = errorData.error || "Failed to delete account";
+        toast.error(errorMessage);
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error("Delete user error:", error);
-      toast.error("Error deleting account");
-      return false;
+      const errorMessage = "Error deleting account";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 
   const fetchAllUsers = async () => {
     try {
-      const res = await fetch(`${api_url}/api/users`, { 
+      const res = await fetch(`${api_url}/api/users`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
+        credentials: "include",
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          // Try to refresh token
+          try {
+            const newToken = await refreshAccessToken();
+            const retryRes = await fetch(`${api_url}/api/users`, {
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${newToken}`,
+              },
+              credentials: "include",
+            });
+            
+            if (retryRes.ok) {
+              return await retryRes.json();
+            }
+          } catch (refreshError) {
+            throw new Error("Authentication failed");
+          }
+        }
+        
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to fetch users");
       }
-      
+
       return await res.json();
-    } catch (err) {
-      console.error("Fetch users error:", err);
+    } catch (error) {
+      console.error("Fetch users error:", error);
       toast.error("Unable to fetch users");
       return [];
     }
   };
 
- 
-  const refreshUser = async () => {
-    if (token) {
-      await fetchCurrentUser();
+  // Enhanced API request helper with automatic token refresh
+  const authenticatedRequest = async (url, options = {}) => {
+    const makeRequest = async (tokenToUse) => {
+      return fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${tokenToUse}`,
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+    };
+
+    try {
+      let response = await makeRequest(token);
+
+      // If unauthorized, try to refresh token
+      if (response.status === 401 && refreshToken) {
+        try {
+          const newToken = await refreshAccessToken();
+          response = await makeRequest(newToken);
+        } catch (refreshError) {
+          clearAuthData();
+          navigate("/login");
+          throw new Error("Session expired. Please login again.");
+        }
+      }
+
+      return response;
+    } catch (error) {
+      console.error("Authenticated request error:", error);
+      throw error;
     }
   };
 
+  const refreshUser = async () => {
+    if (token) {
+      await verifyCurrentUser();
+    }
+  };
+
+  // Check if user is authenticated
+  const isAuthenticated = Boolean(token && user);
+  const isAdmin = Boolean(user?.is_admin);
+  const isBlocked = Boolean(user?.is_blocked);
+
+  const value = {
+    user,
+    token,
+    refreshToken,
+    loading,
+    isAuthenticated,
+    isAdmin,
+    isBlocked,
+    login,
+    register,
+    logout,
+    updateProfile,
+    deleteUser,
+    fetchAllUsers,
+    refreshUser,
+    clearAuthData,
+    authenticatedRequest,
+    refreshAccessToken,
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        login,
-        register,
-        logout,
-        updateProfile,
-        deleteUser,
-        fetchAllUsers,
-        refreshUser, 
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};
+
+export default AuthContext;
