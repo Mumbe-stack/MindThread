@@ -3,11 +3,11 @@ import { useAuth } from "../context/AuthContext";
 
 const Register = () => {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const { register } = useAuth(); // Fixed: was register_user from UserContext, now uses AuthContext
+  const { register } = useAuth(); 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Fixed: now passes the entire form object as AuthContext expects
+    
     register(form);
   };
 

@@ -33,7 +33,7 @@ const EditPost = () => {
         const data = await res.json();
         setPost({ title: data.title, content: data.content });
       } catch (err) {
-        console.error("Error loading post:", err);
+        
         toast.error("Could not load the post.");
       }
     };
@@ -64,7 +64,7 @@ const EditPost = () => {
         toast.error(error.message || "Failed to update post.");
       }
     } catch (err) {
-      console.error("Error updating post:", err);
+      
       toast.error("Something went wrong while updating.");
     }
   };

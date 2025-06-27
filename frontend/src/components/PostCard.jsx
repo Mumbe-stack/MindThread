@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import LikeButton from "./LikeButton"; // Ensure the path is correct
+import LikeButton from "./LikeButton"; 
 
 const PostCard = ({ post }) => {
   return (

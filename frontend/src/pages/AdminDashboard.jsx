@@ -62,7 +62,7 @@ const AdminDashboard = () => {
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
       if (response.status === 404) {
-        console.error(`Endpoint not found: ${response.url}`);
+        
         throw new Error(`Endpoint not found: ${response.url}`);
       }
       if (response.status === 403) {
@@ -73,7 +73,7 @@ const AdminDashboard = () => {
 
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-      console.error("Response is not JSON:", await response.text());
+    
       throw new Error("Server returned non-JSON response");
     }
 
@@ -81,7 +81,7 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    console.log("User state:", user);
+  
     if (!user?.is_admin) {
       if (user) {
         toast.error("Admin access required");
@@ -117,11 +117,8 @@ const AdminDashboard = () => {
   const fetchOverviewData = async () => {
     setLoading(true);
     try {
-      console.log("Fetching overview data...");
-      console.log("API Base URL:", VITE_API_URL);
-      console.log("Token exists:", !!token);
+      
 
-     
       const statsResponse = await fetch(`${VITE_API_URL}/api/admin/stats`, { 
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -129,8 +126,6 @@ const AdminDashboard = () => {
         } 
       });
 
-      console.log("Stats response status:", statsResponse.status);
-      console.log("Stats response URL:", statsResponse.url);
 
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       setStats(statsData);
@@ -166,8 +161,8 @@ const AdminDashboard = () => {
             ]
           });
         } else {
-          console.warn("Trends endpoint not available");
-          // Set default chart data
+        
+         
           setChartData({
             labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             datasets: [
@@ -189,13 +184,13 @@ const AdminDashboard = () => {
           });
         }
       } catch (trendsError) {
-        console.warn("Trends fetch failed:", trendsError.message);
+        
       }
 
       toast.success("Dashboard data loaded");
 
     } catch (err) {
-      console.error("Overview fetch error:", err);
+      
       toast.error(`Failed to load dashboard data: ${err.message}`);
     } finally {
       setLoading(false);
@@ -215,7 +210,7 @@ const AdminDashboard = () => {
       const data = await handleApiResponse(response, "Failed to fetch users");
       setUsers(data);
     } catch (err) {
-      console.error("Users fetch error:", err);
+      
       toast.error(`Failed to load users: ${err.message}`);
     } finally {
       setLoading(false);
@@ -237,7 +232,7 @@ const AdminDashboard = () => {
       const data = await handleApiResponse(response, "User search failed");
       setUserSearchResults(data);
     } catch (err) {
-      console.error("User search error:", err);
+      
       
       const filtered = users.filter(u => 
         u.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
@@ -275,7 +270,7 @@ const AdminDashboard = () => {
       setAllPosts(posts);
       setAllComments(comments);
     } catch (err) {
-      console.error("Content fetch error:", err);
+      
       toast.error(`Failed to load content: ${err.message}`);
     } finally {
       setLoading(false);
@@ -300,7 +295,7 @@ const AdminDashboard = () => {
           flaggedPostsData = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
         }
       } catch (err) {
-        console.warn("Flagged posts endpoint not available");
+        
       }
 
       try {
@@ -314,13 +309,13 @@ const AdminDashboard = () => {
           flaggedCommentsData = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
         }
       } catch (err) {
-        console.warn("Flagged comments endpoint not available");
+    
       }
 
       setFlaggedPosts(flaggedPostsData);
       setFlaggedComments(flaggedCommentsData);
     } catch (err) {
-      console.error("Flagged content fetch error:", err);
+     
       toast.error(`Failed to load flagged content: ${err.message}`);
     } finally {
       setLoading(false);
@@ -369,7 +364,7 @@ const AdminDashboard = () => {
       fetchAllUsers();
       fetchOverviewData();
     } catch (err) {
-      console.error(`User ${action} error:`, err);
+     
       toast.error(err.message);
     }
   };
@@ -416,7 +411,7 @@ const AdminDashboard = () => {
       fetchAllContent();
       fetchOverviewData();
     } catch (err) {
-      console.error(`${type} ${action} error:`, err);
+      ;
       toast.error(err.message);
     }
   };

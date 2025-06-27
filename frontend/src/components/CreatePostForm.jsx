@@ -36,7 +36,7 @@ const CreatePostForm = ({ onClose }) => {
         toast.error(data.error || "Failed to create post");
       }
     } catch (err) {
-      console.error("Error creating post:", err);
+     
       toast.error("Something went wrong");
     }
   };

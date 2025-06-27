@@ -38,12 +38,12 @@ const SinglePost = () => {
   const fetchComments = async () => {
     try {
       setCommentsLoading(true);
-      // Don't require authentication to view comments
+     
       const headers = {
         "Content-Type": "application/json"
       };
       
-      // Only add auth header if user is logged in (for like status)
+     
       if (token) {
         headers.Authorization = `Bearer ${token}`;
       }
@@ -58,12 +58,12 @@ const SinglePost = () => {
       }
       
       const data = await res.json();
-      console.log("Comments fetched:", data); // Debug log
+     
       setComments(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Fetch comments error:", err);
+      
       // Don't show error toast for public viewing
-      console.log("Failed to load comments:", err.message);
+      
       setComments([]);
     } finally {
       setCommentsLoading(false);
@@ -71,7 +71,7 @@ const SinglePost = () => {
   };
 
   const refreshComments = async () => {
-    console.log("Refreshing comments..."); // Debug log
+   
     await fetchComments();
   };
 
@@ -80,8 +80,7 @@ const SinglePost = () => {
       fetchPost();
       fetchComments();
     }
-  }, [id]); // Removed token dependency so comments load regardless of auth status
-
+  }, [id]); 
   const toggleLikePost = async () => {
     if (!user || !token) {
       toast.error("Please log in to like posts");
@@ -111,7 +110,6 @@ const SinglePost = () => {
         toast.error(errorData.error || "Failed to like/unlike post");
       }
     } catch (error) {
-      console.error("Toggle post like error:", error);
       toast.error("Server error while toggling post like");
     }
   };
@@ -151,7 +149,6 @@ const SinglePost = () => {
         toast.error(errorData.error || "Failed to like/unlike comment");
       }
     } catch (error) {
-      console.error("Toggle comment like error:", error);
       toast.error("Error toggling comment like");
     }
   };

@@ -39,10 +39,10 @@ const fetchUserStats = async () => {
       });
     } else {
       const errorText = await response.text();
-      console.error("Fetch failed:", errorText);
+     
     }
   } catch (error) {
-    console.error("Failed to fetch user stats:", error);
+    
   }
 };
 
@@ -76,7 +76,7 @@ This will permanently delete:
       navigate("/login");
      
     } catch (error) {
-      console.error("Delete error:", error);
+      
       toast.error("Failed to delete account. Please try again.");
     } finally {
       setIsDeleting(false);

@@ -53,10 +53,9 @@ const SinglePost = () => {
       }
       
       const data = await res.json();
-      console.log("Comments fetched:", data); // Debug log
-      setComments(Array.isArray(data) ? data : []);
+      
     } catch (err) {
-      console.error("Fetch comments error:", err);
+      
       toast.error("Failed to load comments");
       setComments([]);
     } finally {
@@ -65,7 +64,7 @@ const SinglePost = () => {
   };
 
   const refreshComments = async () => {
-    console.log("Refreshing comments..."); // Debug log
+     
     await fetchComments();
   };
 
@@ -136,7 +135,7 @@ const SinglePost = () => {
         toast.error(errorData.error || "Failed to like/unlike comment");
       }
     } catch (error) {
-      console.error("Toggle comment like error:", error);
+      
       toast.error("Error toggling comment like");
     }
   };

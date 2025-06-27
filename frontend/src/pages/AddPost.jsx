@@ -63,7 +63,7 @@ const AddPost = () => {
         }
       }
     } catch (error) {
-      console.error("Submit error:", error);
+      
       toast.error("Failed to submit post. Check your network.");
     } finally {
       setIsSubmitting(false);

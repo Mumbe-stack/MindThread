@@ -39,11 +39,10 @@ function App() {
           <Route path="/posts/:id" element={<SinglePost />} />
           <Route path="/posts/:id/edit" element={user ? <EditPost /> : <Navigate to="/login" />} />
           
-          {/* Handle 404s - Show NotFound component for invalid routes, but don't break SPA routing */}
+          
           <Route path="/404" element={<NotFound />} />
           
-          {/* Catch-all route: redirect unknown routes to home instead of showing 404 */}
-          {/* This prevents Netlify 404s and lets React Router handle routing */}
+         
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

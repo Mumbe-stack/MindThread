@@ -65,7 +65,7 @@ const Login = () => {
       }
     } catch (err) {
       calledRef.current = false;
-      console.error("Login error:", err);
+     
       toast.error("Network error. Please try again.");
     } finally {
       setIsLoading(false);

@@ -28,7 +28,7 @@ const Posts = () => {
 
       if (!res.ok) {
         const raw = await res.text();
-        console.error("❌ HTTP error:", res.status, raw.slice(0, 100));
+        
         throw new Error(`HTTP ${res.status}: ${raw}`);
       }
 
