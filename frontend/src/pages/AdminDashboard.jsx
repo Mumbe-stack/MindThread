@@ -18,11 +18,10 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-// Fixed API URL to match your deployed backend
-const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const AdminDashboard = () => {
-  const { user, token, authenticatedRequest } = useAuth();
+  const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
   
@@ -48,9 +47,6 @@ const AdminDashboard = () => {
   const [allComments, setAllComments] = useState([]);
   const [contentSearchTerm, setContentSearchTerm] = useState("");
   
-  const [selectedPost, setSelectedPost] = useState(null);
-  const [selectedComment, setSelectedComment] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
@@ -62,7 +58,6 @@ const AdminDashboard = () => {
         const errorData = await response.json();
         errorText = errorData.error || errorData.message || errorMessage;
       } catch {
-        // If JSON parsing fails, use status-based messages
         if (response.status === 404) {
           errorText = `Endpoint not found: ${response.url}`;
         } else if (response.status === 403) {
@@ -142,18 +137,17 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      // Updated to use /api/admin/stats endpoint
-      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/admin/stats`);
+      console.log("Fetching admin stats from:", `${API_URL}/api/admin/stats`);
       
-      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
+      const statsResponse = await makeAuthenticatedRequest(`${API_URL}/api/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       
       console.log("Stats data received:", statsData);
       setStats(statsData);
 
-      // Try to fetch activity trends from admin endpoints
+      // Fetch activity trends
       try {
-        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/activity-trends`);
+        const trendsResponse = await makeAuthenticatedRequest(`${API_URL}/api/admin/activity-trends`);
         
         if (trendsResponse.ok) {
           const trendsData = await handleApiResponse(trendsResponse, "Failed to fetch trends");
@@ -172,6 +166,13 @@ const AdminDashboard = () => {
                 data: trendsData.users || [0, 1, 0, 1, 0, 0, 1],
                 backgroundColor: "#60a5fa",
                 borderColor: "#3b82f6",
+                borderWidth: 1
+              },
+              {
+                label: "New Comments",
+                data: trendsData.comments || [2, 3, 1, 4, 2, 3, 2],
+                backgroundColor: "#f472b6",
+                borderColor: "#ec4899",
                 borderWidth: 1
               }
             ]
@@ -200,7 +201,6 @@ const AdminDashboard = () => {
         }
       } catch (trendsError) {
         console.log("Activity trends not available, using fallback data");
-        // Set fallback chart data
         setChartData({
           labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
           datasets: [
@@ -237,16 +237,24 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/users`);
+      // Use admin-specific endpoint for getting all users
+      const response = await makeAuthenticatedRequest(`${API_URL}/api/admin/users`);
       const data = await handleApiResponse(response, "Failed to fetch users");
       
-      // Handle both array and object responses
       const usersArray = Array.isArray(data) ? data : (data.users || []);
       setUsers(usersArray);
       
     } catch (err) {
       console.error("Users fetch error:", err);
-      toast.error(`Failed to load users: ${err.message}`);
+      // Fallback to regular users endpoint
+      try {
+        const fallbackResponse = await makeAuthenticatedRequest(`${API_URL}/api/users`);
+        const fallbackData = await handleApiResponse(fallbackResponse, "Failed to fetch users");
+        const usersArray = Array.isArray(fallbackData) ? fallbackData : (fallbackData.users || []);
+        setUsers(usersArray);
+      } catch (fallbackErr) {
+        toast.error(`Failed to load users: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -258,7 +266,7 @@ const AdminDashboard = () => {
     setSearchingUsers(true);
     try {
       const response = await makeAuthenticatedRequest(
-        `${VITE_API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`
+        `${API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`
       );
       
       if (response.ok) {
@@ -290,18 +298,41 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      const [postsRes, commentsRes] = await Promise.all([
-        makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`),
-        makeAuthenticatedRequest(`${VITE_API_URL}/api/comments`)
-      ]);
+      // Try admin-specific endpoints first
+      let postsData = [];
+      let commentsData = [];
 
-      const [postsData, commentsData] = await Promise.all([
-        handleApiResponse(postsRes, "Failed to fetch posts"),
-        handleApiResponse(commentsRes, "Failed to fetch comments")
-      ]);
+      try {
+        const postsRes = await makeAuthenticatedRequest(`${API_URL}/api/admin/posts`);
+        if (postsRes.ok) {
+          const data = await handleApiResponse(postsRes, "Failed to fetch posts");
+          postsData = Array.isArray(data) ? data : (data.posts || []);
+        }
+      } catch (err) {
+        console.log("Admin posts endpoint not available, trying regular endpoint");
+        try {
+          const postsRes = await makeAuthenticatedRequest(`${API_URL}/api/posts`);
+          const data = await handleApiResponse(postsRes, "Failed to fetch posts");
+          postsData = Array.isArray(data) ? data : (data.posts || []);
+        } catch (fallbackErr) {
+          console.error("Failed to fetch posts from both endpoints:", fallbackErr);
+        }
+      }
 
-      setAllPosts(Array.isArray(postsData) ? postsData : (postsData.posts || []));
-      setAllComments(Array.isArray(commentsData) ? commentsData : (commentsData.comments || []));
+      try {
+        const commentsRes = await makeAuthenticatedRequest(`${API_URL}/api/admin/comments`);
+        if (commentsRes.ok) {
+          const data = await handleApiResponse(commentsRes, "Failed to fetch comments");
+          commentsData = Array.isArray(data) ? data : (data.comments || []);
+        }
+      } catch (err) {
+        console.log("Admin comments endpoint not available");
+        // Don't try regular comments endpoint as it requires post_id parameter
+        commentsData = [];
+      }
+
+      setAllPosts(postsData);
+      setAllComments(commentsData);
       
     } catch (err) {
       console.error("Content fetch error:", err);
@@ -321,7 +352,7 @@ const AdminDashboard = () => {
 
       // Try to fetch flagged posts
       try {
-        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
+        const postsRes = await makeAuthenticatedRequest(`${API_URL}/api/admin/flagged/posts`);
         if (postsRes.ok) {
           const data = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
           flaggedPostsData = Array.isArray(data) ? data : (data.posts || []);
@@ -332,7 +363,7 @@ const AdminDashboard = () => {
 
       // Try to fetch flagged comments
       try {
-        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/comments`);
+        const commentsRes = await makeAuthenticatedRequest(`${API_URL}/api/admin/flagged/comments`);
         if (commentsRes.ok) {
           const data = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
           flaggedCommentsData = Array.isArray(data) ? data : (data.comments || []);
@@ -357,27 +388,33 @@ const AdminDashboard = () => {
     
     try {
       let endpoint = "";
-      let method = "PATCH";
+      let method = "POST"; // Changed default method
       let body = null;
 
       switch (action) {
         case "block":
+          endpoint = `${API_URL}/api/users/${userId}/block`;
+          method = "POST";
+          break;
         case "unblock":
-          endpoint = `${VITE_API_URL}/api/users/${userId}/block`;
+          endpoint = `${API_URL}/api/users/${userId}/unblock`;
+          method = "POST";
           break;
         case "delete":
           if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
             return;
           }
-          endpoint = `${VITE_API_URL}/api/users/${userId}`;
+          endpoint = `${API_URL}/api/users/${userId}`;
           method = "DELETE";
           break;
         case "make_admin":
-          endpoint = `${VITE_API_URL}/api/users/${userId}`;
+          endpoint = `${API_URL}/api/users/${userId}`;
+          method = "PATCH";
           body = JSON.stringify({ is_admin: true });
           break;
         case "remove_admin":
-          endpoint = `${VITE_API_URL}/api/users/${userId}`;
+          endpoint = `${API_URL}/api/users/${userId}`;
+          method = "PATCH";
           body = JSON.stringify({ is_admin: false });
           break;
       }
@@ -410,21 +447,22 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
+          endpoint = `${API_URL}/api/${type}s/${id}/flag`;
+          method = "POST";
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
             return;
           }
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}`;
+          endpoint = `${API_URL}/api/${type}s/${id}`;
           method = "DELETE";
           break;
       }
@@ -499,7 +537,7 @@ const AdminDashboard = () => {
         <p className="text-gray-600">Manage users, content, and monitor platform activity</p>
         {/* Debug info */}
         <div className="text-xs text-gray-400 mt-2">
-          API: {VITE_API_URL} | User: {user.username} | Admin: {user.is_admin ? "Yes" : "No"}
+          API: {API_URL} | User: {user.username} | Admin: {user.is_admin ? "Yes" : "No"}
         </div>
       </div>
 
@@ -568,7 +606,10 @@ const AdminDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-blue-600 text-sm font-medium">Total Users</p>
-                  <p className="text-2xl font-bold text-blue-900">{stats.users || 0}</p>
+                  <p className="text-2xl font-bold text-blue-900">{stats.users || stats.total_users || 0}</p>
+                  {stats.blocked_users > 0 && (
+                    <p className="text-xs text-red-600">{stats.blocked_users} blocked</p>
+                  )}
                 </div>
                 <div className="text-blue-500 text-2xl">👥</div>
               </div>
@@ -578,7 +619,10 @@ const AdminDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-green-600 text-sm font-medium">Total Posts</p>
-                  <p className="text-2xl font-bold text-green-900">{stats.posts || 0}</p>
+                  <p className="text-2xl font-bold text-green-900">{stats.posts || stats.total_posts || 0}</p>
+                  {stats.recent_posts > 0 && (
+                    <p className="text-xs text-green-600">{stats.recent_posts} this month</p>
+                  )}
                 </div>
                 <div className="text-green-500 text-2xl">📝</div>
               </div>
@@ -588,7 +632,10 @@ const AdminDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-purple-600 text-sm font-medium">Total Comments</p>
-                  <p className="text-2xl font-bold text-purple-900">{stats.comments || 0}</p>
+                  <p className="text-2xl font-bold text-purple-900">{stats.comments || stats.total_comments || 0}</p>
+                  {stats.recent_comments > 0 && (
+                    <p className="text-xs text-purple-600">{stats.recent_comments} this month</p>
+                  )}
                 </div>
                 <div className="text-purple-500 text-2xl">💬</div>
               </div>
@@ -599,6 +646,9 @@ const AdminDashboard = () => {
                 <div>
                   <p className="text-red-600 text-sm font-medium">Flagged Content</p>
                   <p className="text-2xl font-bold text-red-900">{stats.flagged || 0}</p>
+                  <div className="text-xs text-gray-600">
+                    Posts: {stats.flagged_posts || 0} | Comments: {stats.flagged_comments || 0}
+                  </div>
                 </div>
                 <div className="text-red-500 text-2xl">🚩</div>
               </div>
@@ -700,6 +750,9 @@ const AdminDashboard = () => {
                               Blocked
                             </span>
                           )}
+                          <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                            Posts: {userItem.post_count || 0}
+                          </span>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -822,6 +875,7 @@ const AdminDashboard = () => {
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           By {comment.author?.username || "Unknown"} • {new Date(comment.created_at).toLocaleDateString()}
+                          {comment.post_title && ` • On "${comment.post_title}"`}
                         </p>
                       </div>
                       <div className="flex gap-2 ml-4">
@@ -982,7 +1036,7 @@ const AdminDashboard = () => {
         <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
           <h4 className="font-bold mb-2">🔍 Debug Info</h4>
           <div className="space-y-1">
-            <div>API: {VITE_API_URL}</div>
+            <div>API: {API_URL}</div>
             <div>User: {user?.username}</div>
             <div>Admin: {user?.is_admin ? "✅" : "❌"}</div>
             <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
@@ -991,7 +1045,7 @@ const AdminDashboard = () => {
             <div>Stats: U:{stats.users} P:{stats.posts} C:{stats.comments}</div>
           </div>
           <button
-            onClick={() => console.log({ user, token, stats, VITE_API_URL })}
+            onClick={() => console.log({ user, token, stats, API_URL })}
             className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
           >
             Log Debug Data
