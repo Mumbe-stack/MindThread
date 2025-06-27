@@ -83,6 +83,11 @@ const SinglePost = () => {
   }, [id]); // Removed token dependency so comments load regardless of auth status
 
   const toggleLikePost = async () => {
+    if (!user || !token) {
+      toast.error("Please log in to like posts");
+      return;
+    }
+
     try {
       const res = await fetch(`${VITE_API_URL}/api/posts/${id}/like`, {
         method: "POST",
@@ -92,17 +97,21 @@ const SinglePost = () => {
         },
         credentials: "include",
       });
+
       if (res.ok) {
         const data = await res.json();
         setPost((prev) => ({
           ...prev,
-          likes: data.likes,
-          liked_by: data.liked_by,
+          likes: data.likes || 0,
+          liked_by: data.liked_by || []
         }));
+        toast.success(data.message || "Post like toggled");
       } else {
-        toast.error("Failed to like/unlike post");
+        const errorData = await res.json();
+        toast.error(errorData.error || "Failed to like/unlike post");
       }
-    } catch {
+    } catch (error) {
+      console.error("Toggle post like error:", error);
       toast.error("Server error while toggling post like");
     }
   };
@@ -204,30 +213,35 @@ const SinglePost = () => {
         <p className="mb-4 text-gray-800 whitespace-pre-wrap">{post.content}</p>
 
         <div className="flex items-center gap-4">
-          {user && (
+          {user ? (
             <button
               onClick={toggleLikePost}
-              className={`px-3 py-1 rounded ${
+              disabled={!user}
+              className={`px-4 py-2 rounded-md font-medium transition-colors ${
                 isPostLiked()
-                  ? "bg-red-100 text-red-600 border border-red-300"
-                  : "bg-gray-100 text-gray-700 border"
+                  ? "bg-red-100 text-red-600 border border-red-300 hover:bg-red-200"
+                  : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
               }`}
             >
               {isPostLiked() ? "♥ Unlike" : "♡ Like"} ({post.likes || 0})
             </button>
+          ) : (
+            <span className="px-4 py-2 rounded-md text-gray-500 bg-gray-100 border border-gray-300">
+              ♡ Like ({post.likes || 0})
+            </span>
           )}
 
           {user?.id === post.user_id && (
             <>
               <Link
                 to={`/posts/${post.id}/edit`}
-                className="bg-blue-600 text-white px-3 py-1 rounded"
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
               >
                 Edit
               </Link>
               <button
                 onClick={handleDeletePost}
-                className="bg-red-600 text-white px-3 py-1 rounded"
+                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
               >
                 Delete
               </button>

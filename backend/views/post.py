@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime
+from datetime import datetime, timezone
 from models import db, Post, User
 from .utils import block_check_required
 
-post_bp = Blueprint('post_bp', __name__, url_prefix="/api/posts")
+post_bp = Blueprint('post_bp', __name__)
 
 
 @post_bp.route("", methods=["GET"])  
@@ -21,16 +21,31 @@ def get_all_posts():
         else:
             posts = Post.query.filter_by(is_approved=True).order_by(Post.created_at.desc()).all()
 
-        return jsonify([{
-            "id": post.id,
-            "title": post.title,
-            "content": post.content,
-            "tags": post.tags,
-            "user_id": post.user_id,
-            "created_at": post.created_at.isoformat(),
-            "is_approved": post.is_approved,
-            "is_flagged": post.is_flagged
-        } for post in posts]), 200
+        posts_data = []
+        for post in posts:
+            # Get like information
+            likes_count = 0
+            liked_by_list = []
+            
+            if hasattr(post, 'liked_by') and post.liked_by:
+                likes_count = len(post.liked_by)
+                liked_by_list = [user.id for user in post.liked_by]
+
+            post_data = {
+                "id": post.id,
+                "title": post.title,
+                "content": post.content,
+                "tags": post.tags,
+                "user_id": post.user_id,
+                "created_at": post.created_at.isoformat(),
+                "is_approved": post.is_approved,
+                "is_flagged": post.is_flagged,
+                "likes": likes_count,
+                "liked_by": liked_by_list
+            }
+            posts_data.append(post_data)
+
+        return jsonify(posts_data), 200
 
     except Exception as e:
         print("Error in get_all_posts:", e)
@@ -49,6 +64,14 @@ def get_single_post(id):
         if not post.is_approved and (not user or not user.is_admin):
             return jsonify({"error": "Post not available"}), 403
 
+        # Get like information
+        likes_count = 0
+        liked_by_list = []
+        
+        if hasattr(post, 'liked_by') and post.liked_by:
+            likes_count = len(post.liked_by)
+            liked_by_list = [u.id for u in post.liked_by]
+
         return jsonify({
             "id": post.id,
             "title": post.title,
@@ -57,7 +80,9 @@ def get_single_post(id):
             "user_id": post.user_id,
             "created_at": post.created_at.isoformat(),
             "is_approved": post.is_approved,
-            "is_flagged": post.is_flagged
+            "is_flagged": post.is_flagged,
+            "likes": likes_count,
+            "liked_by": liked_by_list
         }), 200
 
     except Exception as e:
@@ -93,7 +118,7 @@ def create_post():
             content=content,
             tags=tags or None,
             user_id=user_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             is_approved=user.is_admin
         )
 
@@ -167,25 +192,48 @@ def delete_post(id):
         return jsonify({"error": "Failed to delete post"}), 500
 
 
-@post_bp.route("/<int:id>/like", methods=["POST", "OPTIONS"])
-@jwt_required(optional=True)
-@block_check_required
+@post_bp.route("/<int:id>/like", methods=["POST"])
+@jwt_required()
 def like_post(id):
-    if request.method == "OPTIONS":
-        return '', 204
+    """Toggle like on a post - authentication required"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        post = Post.query.get_or_404(id)
 
-    user = User.query.get(get_jwt_identity())
-    post = Post.query.get_or_404(id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
-    if post in user.liked_posts:
-        user.liked_posts.remove(post)
-        msg = "Unliked"
-    else:
-        user.liked_posts.append(post)
-        msg = "Liked"
+        # Check if user already liked this post
+        if hasattr(post, 'liked_by') and user in post.liked_by:
+            post.liked_by.remove(user)
+            message = "Post unliked"
+        else:
+            if not hasattr(post, 'liked_by'):
+                # Initialize the relationship if it doesn't exist
+                post.liked_by = []
+            post.liked_by.append(user)
+            message = "Post liked"
 
-    db.session.commit()
-    return jsonify({"message": f"{msg} post '{post.title}'"}), 200
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": message,
+            "likes": len(post.liked_by) if hasattr(post, 'liked_by') else 0,
+            "liked_by": [u.id for u in post.liked_by] if hasattr(post, 'liked_by') else []
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error toggling post like: {e}")
+        return jsonify({"error": "Failed to toggle like"}), 500
+
+
+@post_bp.route("/<int:id>/like", methods=["OPTIONS"])
+def like_post_options(id):
+    """Handle OPTIONS request for CORS"""
+    return '', 204
 
 
 @post_bp.route("/<int:id>/approve", methods=["PATCH"])
@@ -225,5 +273,6 @@ def get_flagged_posts():
         "title": p.title,
         "content": p.content,
         "is_flagged": p.is_flagged,
-        "is_approved": p.is_approved
+        "is_approved": p.is_approved,
+        "likes": len(p.liked_by) if hasattr(p, 'liked_by') and p.liked_by else 0
     } for p in flagged]), 200
