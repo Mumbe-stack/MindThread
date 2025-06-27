@@ -18,14 +18,13 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-
-const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread.onrender.com";
+// Fixed API URL to match your deployed backend
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const AdminDashboard = () => {
-  const { user, token } = useAuth();
+  const { user, token, authenticatedRequest } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
-  
   
   const [stats, setStats] = useState({ 
     users: 0, 
@@ -38,12 +37,10 @@ const AdminDashboard = () => {
   });
   const [chartData, setChartData] = useState(null);
   
-  
   const [users, setUsers] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
-  
   
   const [flaggedComments, setFlaggedComments] = useState([]);
   const [flaggedPosts, setFlaggedPosts] = useState([]);
@@ -51,37 +48,62 @@ const AdminDashboard = () => {
   const [allComments, setAllComments] = useState([]);
   const [contentSearchTerm, setContentSearchTerm] = useState("");
   
-  
   const [selectedPost, setSelectedPost] = useState(null);
   const [selectedComment, setSelectedComment] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
-  
+  // Enhanced API response handler
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
-      if (response.status === 404) {
-        
-        throw new Error(`Endpoint not found: ${response.url}`);
+      let errorText = errorMessage;
+      try {
+        const errorData = await response.json();
+        errorText = errorData.error || errorData.message || errorMessage;
+      } catch {
+        // If JSON parsing fails, use status-based messages
+        if (response.status === 404) {
+          errorText = `Endpoint not found: ${response.url}`;
+        } else if (response.status === 403) {
+          errorText = "Admin access required";
+        } else if (response.status === 401) {
+          errorText = "Authentication required";
+        } else {
+          errorText = `${errorMessage} (${response.status})`;
+        }
       }
-      if (response.status === 403) {
-        throw new Error("Admin access required");
-      }
-      throw new Error(`${errorMessage} (${response.status})`);
+      throw new Error(errorText);
     }
 
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-    
       throw new Error("Server returned non-JSON response");
     }
 
     return response.json();
   };
 
+  // Enhanced authenticated fetch function
+  const makeAuthenticatedRequest = async (url, options = {}) => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+      return response;
+    } catch (error) {
+      console.error("Network error:", error);
+      throw new Error("Network error. Please check your connection.");
+    }
+  };
+
   useEffect(() => {
-  
     if (!user?.is_admin) {
       if (user) {
         toast.error("Admin access required");
@@ -89,9 +111,11 @@ const AdminDashboard = () => {
       return;
     }
     fetchOverviewData();
-  }, [user]);
+  }, [user, token]);
 
   useEffect(() => {
+    if (!user?.is_admin) return;
+    
     if (activeTab === "users") {
       fetchAllUsers();
     } else if (activeTab === "content") {
@@ -99,9 +123,8 @@ const AdminDashboard = () => {
     } else if (activeTab === "flagged") {
       fetchFlaggedContent();
     }
-  }, [activeTab]);
+  }, [activeTab, user, token]);
 
-  
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
       if (userSearchTerm.trim().length > 0) {
@@ -115,45 +138,37 @@ const AdminDashboard = () => {
   }, [userSearchTerm]);
 
   const fetchOverviewData = async () => {
+    if (!token || !user?.is_admin) return;
+    
     setLoading(true);
     try {
+      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/admin/stats`);
       
-
-      const statsResponse = await fetch(`${VITE_API_URL}/api/admin/stats`, { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        } 
-      });
-
-
+      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
+      
+      console.log("Stats data received:", statsData);
       setStats(statsData);
 
-      
+      // Try to fetch activity trends (optional)
       try {
-        const trendsResponse = await fetch(`${VITE_API_URL}/api/admin/activity-trends`, { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          } 
-        });
-
+        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/activity-trends`);
+        
         if (trendsResponse.ok) {
           const trendsData = await handleApiResponse(trendsResponse, "Failed to fetch trends");
           setChartData({
-            labels: trendsData.labels,
+            labels: trendsData.labels || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             datasets: [
               {
                 label: "New Posts",
-                data: trendsData.posts,
+                data: trendsData.posts || [1, 2, 0, 3, 1, 2, 1],
                 backgroundColor: "#34d399",
                 borderColor: "#10b981",
                 borderWidth: 1
               },
               {
                 label: "New Users",
-                data: trendsData.users,
+                data: trendsData.users || [0, 1, 0, 1, 0, 0, 1],
                 backgroundColor: "#60a5fa",
                 borderColor: "#3b82f6",
                 borderWidth: 1
@@ -161,8 +176,7 @@ const AdminDashboard = () => {
             ]
           });
         } else {
-        
-         
+          // Fallback chart data
           setChartData({
             labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             datasets: [
@@ -184,13 +198,33 @@ const AdminDashboard = () => {
           });
         }
       } catch (trendsError) {
-        
+        console.log("Activity trends not available, using fallback data");
+        // Set fallback chart data
+        setChartData({
+          labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+          datasets: [
+            {
+              label: "New Posts",
+              data: [1, 2, 0, 3, 1, 2, 1],
+              backgroundColor: "#34d399",
+              borderColor: "#10b981",
+              borderWidth: 1
+            },
+            {
+              label: "New Users",
+              data: [0, 1, 0, 1, 0, 0, 1],
+              backgroundColor: "#60a5fa",
+              borderColor: "#3b82f6",
+              borderWidth: 1
+            }
+          ]
+        });
       }
 
-      toast.success("Dashboard data loaded");
+      toast.success("Dashboard data loaded successfully");
 
     } catch (err) {
-      
+      console.error("Dashboard data fetch error:", err);
       toast.error(`Failed to load dashboard data: ${err.message}`);
     } finally {
       setLoading(false);
@@ -198,19 +232,19 @@ const AdminDashboard = () => {
   };
 
   const fetchAllUsers = async () => {
+    if (!token || !user?.is_admin) return;
+    
     setLoading(true);
     try {
-      const response = await fetch(`${VITE_API_URL}/api/users`, { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        } 
-      });
-      
+      const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/users`);
       const data = await handleApiResponse(response, "Failed to fetch users");
-      setUsers(data);
-    } catch (err) {
       
+      // Handle both array and object responses
+      const usersArray = Array.isArray(data) ? data : (data.users || []);
+      setUsers(usersArray);
+      
+    } catch (err) {
+      console.error("Users fetch error:", err);
       toast.error(`Failed to load users: ${err.message}`);
     } finally {
       setLoading(false);
@@ -218,25 +252,31 @@ const AdminDashboard = () => {
   };
 
   const searchUsers = async () => {
-    if (!userSearchTerm.trim()) return;
+    if (!userSearchTerm.trim() || !token) return;
     
     setSearchingUsers(true);
     try {
-      const response = await fetch(`${VITE_API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
+      const response = await makeAuthenticatedRequest(
+        `${VITE_API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`
+      );
       
-      const data = await handleApiResponse(response, "User search failed");
-      setUserSearchResults(data);
+      if (response.ok) {
+        const data = await handleApiResponse(response, "User search failed");
+        setUserSearchResults(Array.isArray(data) ? data : (data.users || []));
+      } else {
+        // Fallback to client-side search
+        const filtered = users.filter(u => 
+          u.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+          u.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
+        );
+        setUserSearchResults(filtered);
+      }
     } catch (err) {
-      
-      
+      console.error("User search error:", err);
+      // Fallback to client-side search
       const filtered = users.filter(u => 
-        u.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearchTerm.toLowerCase())
+        u.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+        u.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
       );
       setUserSearchResults(filtered);
     } finally {
@@ -245,32 +285,25 @@ const AdminDashboard = () => {
   };
 
   const fetchAllContent = async () => {
+    if (!token || !user?.is_admin) return;
+    
     setLoading(true);
     try {
       const [postsRes, commentsRes] = await Promise.all([
-        fetch(`${VITE_API_URL}/api/posts`, { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          } 
-        }),
-        fetch(`${VITE_API_URL}/api/comments`, { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          } 
-        })
+        makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`),
+        makeAuthenticatedRequest(`${VITE_API_URL}/api/comments`)
       ]);
 
-      const [posts, comments] = await Promise.all([
+      const [postsData, commentsData] = await Promise.all([
         handleApiResponse(postsRes, "Failed to fetch posts"),
         handleApiResponse(commentsRes, "Failed to fetch comments")
       ]);
 
-      setAllPosts(posts);
-      setAllComments(comments);
-    } catch (err) {
+      setAllPosts(Array.isArray(postsData) ? postsData : (postsData.posts || []));
+      setAllComments(Array.isArray(commentsData) ? commentsData : (commentsData.comments || []));
       
+    } catch (err) {
+      console.error("Content fetch error:", err);
       toast.error(`Failed to load content: ${err.message}`);
     } finally {
       setLoading(false);
@@ -278,44 +311,40 @@ const AdminDashboard = () => {
   };
 
   const fetchFlaggedContent = async () => {
+    if (!token || !user?.is_admin) return;
+    
     setLoading(true);
     try {
-      
       let flaggedPostsData = [];
       let flaggedCommentsData = [];
 
+      // Try to fetch flagged posts
       try {
-        const postsRes = await fetch(`${VITE_API_URL}/api/admin/flagged/posts`, { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          } 
-        });
+        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
         if (postsRes.ok) {
-          flaggedPostsData = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
+          const data = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
+          flaggedPostsData = Array.isArray(data) ? data : (data.posts || []);
         }
       } catch (err) {
-        
+        console.log("Flagged posts endpoint not available");
       }
 
+      // Try to fetch flagged comments
       try {
-        const commentsRes = await fetch(`${VITE_API_URL}/api/admin/flagged/comments`, { 
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json"
-          } 
-        });
+        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/comments`);
         if (commentsRes.ok) {
-          flaggedCommentsData = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
+          const data = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
+          flaggedCommentsData = Array.isArray(data) ? data : (data.comments || []);
         }
       } catch (err) {
-    
+        console.log("Flagged comments endpoint not available");
       }
 
       setFlaggedPosts(flaggedPostsData);
       setFlaggedComments(flaggedCommentsData);
+      
     } catch (err) {
-     
+      console.error("Flagged content fetch error:", err);
       toast.error(`Failed to load flagged content: ${err.message}`);
     } finally {
       setLoading(false);
@@ -323,6 +352,8 @@ const AdminDashboard = () => {
   };
 
   const handleUserAction = async (userId, action) => {
+    if (!token || !user?.is_admin) return;
+    
     try {
       let endpoint = "";
       let method = "PATCH";
@@ -350,26 +381,27 @@ const AdminDashboard = () => {
           break;
       }
 
-      const response = await fetch(endpoint, {
+      const response = await makeAuthenticatedRequest(endpoint, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
         body
       });
 
       await handleApiResponse(response, `Failed to ${action} user`);
       toast.success(`User ${action} successful`);
-      fetchAllUsers();
-      fetchOverviewData();
+      
+      // Refresh data
+      await fetchAllUsers();
+      await fetchOverviewData();
+      
     } catch (err) {
-     
+      console.error(`User ${action} error:`, err);
       toast.error(err.message);
     }
   };
 
   const handleContentAction = async (type, id, action) => {
+    if (!token || !user?.is_admin) return;
+    
     try {
       let endpoint = "";
       let method = "PATCH";
@@ -396,42 +428,43 @@ const AdminDashboard = () => {
           break;
       }
 
-      const response = await fetch(endpoint, {
+      const response = await makeAuthenticatedRequest(endpoint, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
         body
       });
 
       await handleApiResponse(response, `Failed to ${action} ${type}`);
       toast.success(`${type} ${action} successful`);
-      fetchFlaggedContent();
-      fetchAllContent();
-      fetchOverviewData();
+      
+      // Refresh data
+      await fetchFlaggedContent();
+      await fetchAllContent();
+      await fetchOverviewData();
+      
     } catch (err) {
-      ;
+      console.error(`Content ${action} error:`, err);
       toast.error(err.message);
     }
   };
 
+  // Filter functions with null checks
   const filteredUsers = userSearchTerm.trim() 
     ? userSearchResults 
     : users.filter(u => 
-        u.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearchTerm.toLowerCase())
+        u?.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+        u?.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
       );
 
   const filteredPosts = allPosts.filter(p =>
-    p.title.toLowerCase().includes(contentSearchTerm.toLowerCase()) ||
-    p.content.toLowerCase().includes(contentSearchTerm.toLowerCase())
+    p?.title?.toLowerCase().includes(contentSearchTerm.toLowerCase()) ||
+    p?.content?.toLowerCase().includes(contentSearchTerm.toLowerCase())
   );
 
   const filteredComments = allComments.filter(c =>
-    c.content.toLowerCase().includes(contentSearchTerm.toLowerCase())
+    c?.content?.toLowerCase().includes(contentSearchTerm.toLowerCase())
   );
 
+  // Loading state
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -443,6 +476,7 @@ const AdminDashboard = () => {
     );
   }
 
+  // Access denied state
   if (!user?.is_admin) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -450,6 +484,7 @@ const AdminDashboard = () => {
           <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
           <p className="text-gray-600">You need admin privileges to access this page.</p>
           <p className="text-sm text-gray-500 mt-2">Current user: {user?.username || "Not logged in"}</p>
+          <p className="text-sm text-gray-500">Admin status: {user?.is_admin ? "Yes" : "No"}</p>
         </div>
       </div>
     );
@@ -479,7 +514,7 @@ const AdminDashboard = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.id
                   ? "border-indigo-500 text-indigo-600"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -491,6 +526,7 @@ const AdminDashboard = () => {
         </nav>
       </div>
 
+      {/* Loading indicator */}
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -505,20 +541,21 @@ const AdminDashboard = () => {
           <div className="flex flex-wrap gap-4">
             <button
               onClick={() => setShowUserForm(true)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
             >
               ➕ Create User
             </button>
             <button
               onClick={() => setShowPostForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
               ➕ Create Post
             </button>
             <ExportCSV data={users} filename="users_report.csv" />
             <button
               onClick={fetchOverviewData}
-              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+              disabled={loading}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               🔄 Refresh Data
             </button>
@@ -526,43 +563,43 @@ const AdminDashboard = () => {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-blue-600 text-sm font-medium">Total Users</p>
-                  <p className="text-2xl font-bold text-blue-900">{stats.users}</p>
+                  <p className="text-2xl font-bold text-blue-900">{stats.users || 0}</p>
                 </div>
-                <div className="text-blue-500">👥</div>
+                <div className="text-blue-500 text-2xl">👥</div>
               </div>
             </div>
 
-            <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+            <div className="bg-green-50 p-6 rounded-lg border border-green-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-green-600 text-sm font-medium">Total Posts</p>
-                  <p className="text-2xl font-bold text-green-900">{stats.posts}</p>
+                  <p className="text-2xl font-bold text-green-900">{stats.posts || 0}</p>
                 </div>
-                <div className="text-green-500">📝</div>
+                <div className="text-green-500 text-2xl">📝</div>
               </div>
             </div>
 
-            <div className="bg-purple-50 p-6 rounded-lg border border-purple-200">
+            <div className="bg-purple-50 p-6 rounded-lg border border-purple-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-purple-600 text-sm font-medium">Total Comments</p>
-                  <p className="text-2xl font-bold text-purple-900">{stats.comments}</p>
+                  <p className="text-2xl font-bold text-purple-900">{stats.comments || 0}</p>
                 </div>
-                <div className="text-purple-500">💬</div>
+                <div className="text-purple-500 text-2xl">💬</div>
               </div>
             </div>
 
-            <div className="bg-red-50 p-6 rounded-lg border border-red-200">
+            <div className="bg-red-50 p-6 rounded-lg border border-red-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-red-600 text-sm font-medium">Flagged Content</p>
-                  <p className="text-2xl font-bold text-red-900">{stats.flagged}</p>
+                  <p className="text-2xl font-bold text-red-900">{stats.flagged || 0}</p>
                 </div>
-                <div className="text-red-500">🚩</div>
+                <div className="text-red-500 text-2xl">🚩</div>
               </div>
             </div>
           </div>
@@ -571,48 +608,346 @@ const AdminDashboard = () => {
           {chartData && (
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
               <h3 className="text-lg font-semibold mb-4">📊 Weekly Activity Trends</h3>
-              <Bar 
-                data={chartData} 
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'top',
+              <div className="h-80">
+                <Bar 
+                  data={chartData} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'top',
+                      },
+                      title: {
+                        display: true,
+                        text: 'Platform Activity (Last 7 Days)'
+                      }
                     },
-                    title: {
-                      display: true,
-                      text: 'Platform Activity (Last 7 Days)'
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          stepSize: 1
+                        }
+                      }
                     }
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true
-                    }
-                  }
-                }}
-              />
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
       )}
 
-      
-      {activeTab !== "overview" && (
-        <div className="text-center py-12">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Management
-          </h3>
-          <p className="text-gray-600">This section is being loaded...</p>
-          <button
-            onClick={() => {
-              if (activeTab === "users") fetchAllUsers();
-              else if (activeTab === "content") fetchAllContent();
-              else if (activeTab === "flagged") fetchFlaggedContent();
-            }}
-            className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-          >
-            Load {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Data
-          </button>
+      {/* Users Tab */}
+      {activeTab === "users" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">👥 User Management</h3>
+            <button
+              onClick={fetchAllUsers}
+              disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+            >
+              🔄 Refresh Users
+            </button>
+          </div>
+
+          {/* User Search */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search users by username or email..."
+              value={userSearchTerm}
+              onChange={(e) => setUserSearchTerm(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            {searchingUsers && (
+              <div className="absolute right-3 top-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+              </div>
+            )}
+          </div>
+
+          {/* Users List */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-3 bg-gray-50 border-b">
+              <h4 className="font-medium text-gray-900">
+                Users ({filteredUsers.length})
+              </h4>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {filteredUsers.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  {loading ? "Loading users..." : "No users found"}
+                </div>
+              ) : (
+                filteredUsers.map((user) => (
+                  <div key={user.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className="font-medium text-gray-900">{user.username}</h5>
+                        <p className="text-sm text-gray-600">{user.email}</p>
+                        <div className="flex gap-2 mt-1">
+                          {user.is_admin && (
+                            <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
+                              Admin
+                            </span>
+                          )}
+                          {user.is_blocked && (
+                            <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">
+                              Blocked
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleUserAction(user.id, user.is_blocked ? "unblock" : "block")}
+                          className={`px-3 py-1 text-xs rounded ${
+                            user.is_blocked
+                              ? "bg-green-100 text-green-800 hover:bg-green-200"
+                              : "bg-red-100 text-red-800 hover:bg-red-200"
+                          }`}
+                        >
+                          {user.is_blocked ? "Unblock" : "Block"}
+                        </button>
+                        <button
+                          onClick={() => handleUserAction(user.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Tab */}
+      {activeTab === "content" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">📝 Content Management</h3>
+            <button
+              onClick={fetchAllContent}
+              disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+            >
+              🔄 Refresh Content
+            </button>
+          </div>
+
+          {/* Content Search */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search posts and comments..."
+              value={contentSearchTerm}
+              onChange={(e) => setContentSearchTerm(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+
+          {/* Posts Section */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-3 bg-gray-50 border-b">
+              <h4 className="font-medium text-gray-900">
+                Posts ({filteredPosts.length})
+              </h4>
+            </div>
+            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+              {filteredPosts.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  {loading ? "Loading posts..." : "No posts found"}
+                </div>
+              ) : (
+                filteredPosts.slice(0, 10).map((post) => (
+                  <div key={post.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h5 className="font-medium text-gray-900 truncate">{post.title}</h5>
+                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                          {post.content?.substring(0, 100)}...
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          By {post.author?.username || "Unknown"} • {new Date(post.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "flag")}
+                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        >
+                          Flag
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Comments Section */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-3 bg-gray-50 border-b">
+              <h4 className="font-medium text-gray-900">
+                Comments ({filteredComments.length})
+              </h4>
+            </div>
+            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+              {filteredComments.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  {loading ? "Loading comments..." : "No comments found"}
+                </div>
+              ) : (
+                filteredComments.slice(0, 10).map((comment) => (
+                  <div key={comment.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900 line-clamp-3">
+                          {comment.content}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          By {comment.author?.username || "Unknown"} • {new Date(comment.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "flag")}
+                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        >
+                          Flag
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flagged Tab */}
+      {activeTab === "flagged" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">🚩 Flagged Content</h3>
+            <button
+              onClick={fetchFlaggedContent}
+              disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+            >
+              🔄 Refresh Flagged Content
+            </button>
+          </div>
+
+          {/* Flagged Posts */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-3 bg-red-50 border-b border-red-200">
+              <h4 className="font-medium text-red-900">
+                🚩 Flagged Posts ({flaggedPosts.length})
+              </h4>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {flaggedPosts.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  No flagged posts found
+                </div>
+              ) : (
+                flaggedPosts.map((post) => (
+                  <div key={post.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h5 className="font-medium text-gray-900">{post.title}</h5>
+                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                          {post.content?.substring(0, 150)}...
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          By {post.author?.username || "Unknown"} • Flagged on {new Date(post.flagged_at || post.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "approve")}
+                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Flagged Comments */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-3 bg-red-50 border-b border-red-200">
+              <h4 className="font-medium text-red-900">
+                🚩 Flagged Comments ({flaggedComments.length})
+              </h4>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {flaggedComments.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  No flagged comments found
+                </div>
+              ) : (
+                flaggedComments.map((comment) => (
+                  <div key={comment.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900">{comment.content}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          By {comment.author?.username || "Unknown"} • Flagged on {new Date(comment.flagged_at || comment.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "approve")}
+                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -641,16 +976,25 @@ const AdminDashboard = () => {
         </Modal>
       )}
 
-    
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm">
-          <h4 className="font-bold mb-2">Debug Info</h4>
-          <div>API Base URL: {VITE_API_URL}</div>
-          <div>User: {user?.username}</div>
-          <div>Is Admin: {user?.is_admin ? "Yes" : "No"}</div>
-          <div>Token: {token ? "Present" : "Missing"}</div>
-          <div>Active Tab: {activeTab}</div>
-          <div>Loading: {loading ? "Yes" : "No"}</div>
+      {/* Debug Panel (Development Only) */}
+      {import.meta.env.DEV && (
+        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
+          <h4 className="font-bold mb-2">🔍 Debug Info</h4>
+          <div className="space-y-1">
+            <div>API: {VITE_API_URL}</div>
+            <div>User: {user?.username}</div>
+            <div>Admin: {user?.is_admin ? "✅" : "❌"}</div>
+            <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
+            <div>Active Tab: {activeTab}</div>
+            <div>Loading: {loading ? "🔄" : "✅"}</div>
+            <div>Stats: U:{stats.users} P:{stats.posts} C:{stats.comments}</div>
+          </div>
+          <button
+            onClick={() => console.log({ user, token, stats, VITE_API_URL })}
+            className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+          >
+            Log Debug Data
+          </button>
         </div>
       )}
     </div>
