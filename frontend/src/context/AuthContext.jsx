@@ -7,7 +7,7 @@ const api_url = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.c
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // Add loading state
+  const [loading, setLoading] = useState(true); 
   const navigate = useNavigate();
   const [token, setToken] = useState(localStorage.getItem("token"));
 
@@ -15,7 +15,7 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       fetchCurrentUser();
     } else {
-      setLoading(false); // Stop loading if no token
+      setLoading(false); 
     }
   }, [token]);
 

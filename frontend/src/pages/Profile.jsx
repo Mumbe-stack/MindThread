@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import AvatarUploader from "../components/AvatarUploader";
 import toast from "react-hot-toast";
 
-// Get API URL from environment or use default
+
 const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const Profile = () => {
@@ -26,14 +26,14 @@ const Profile = () => {
     }
   }, [user, token]);
 
-  // FIXED: Correct API endpoint that matches your backend
+ 
   const fetchUserStats = async () => {
     if (!user || !token) return;
     
     try {
       setIsLoadingStats(true);
       
-      // CORRECTED: Use the endpoint that exists in your backend
+      
       const response = await fetch(`${API_URL}/api/users/${user.id}/stats`, {
         method: "GET",
         headers: {
@@ -46,21 +46,21 @@ const Profile = () => {
 
       if (response.ok) {
         const userData = await response.json();
-        console.log("User stats received:", userData); // Debug log
+         
         setUserStats({
           posts: userData.posts || 0,
           comments: userData.comments || 0,
-          votes: userData.votes || 0, // Added votes from your backend
+          votes: userData.votes || 0, 
         });
       } else {
-        // If stats endpoint fails, log the error but don't crash
+        
         const errorText = await response.text();
         console.error("Failed to fetch user stats:", response.status, errorText);
         setUserStats({ posts: 0, comments: 0, votes: 0 });
       }
     } catch (error) {
       console.error("Error fetching user stats:", error);
-      // Set default values on error
+      
       setUserStats({ posts: 0, comments: 0, votes: 0 });
     } finally {
       setIsLoadingStats(false);
@@ -79,7 +79,7 @@ This will permanently delete:
     const confirmed = window.confirm(confirmMessage);
     if (!confirmed) return;
 
-    // Double confirmation
+    
     const doubleConfirm = window.confirm("Are you absolutely sure? Type 'DELETE' in the next prompt to confirm.");
     if (!doubleConfirm) return;
 
@@ -103,7 +103,7 @@ This will permanently delete:
     }
   };
 
-  // Loading state
+  
   if (loading) {
     return (
       <div className="max-w-lg mx-auto p-6 bg-white shadow rounded mt-10">
@@ -117,7 +117,7 @@ This will permanently delete:
     );
   }
 
-  // Not authenticated
+  
   if (!user) {
     return <p className="text-center p-6">Redirecting to login...</p>;
   }
