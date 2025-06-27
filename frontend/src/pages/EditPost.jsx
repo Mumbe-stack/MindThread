@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-const VITE_API_URL = import.meta.env.VITE_API_URL || "";
+const VITE_API_URL = import.meta.env.VITE_API_URL|| "https://mindthread-1.onrender.com";
 
 const EditPost = () => {
   const { id } = useParams();
