@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
@@ -15,12 +14,12 @@ const AvatarUploader = ({ onUploadSuccess }) => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
+      console.error('Please select an image file');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB');
+      console.error('File size must be less than 5MB');
       return;
     }
 
@@ -49,22 +48,15 @@ const AvatarUploader = ({ onUploadSuccess }) => {
         const result = await response.json();
         console.log("Avatar upload success:", result);
         
-        toast.success('Avatar updated successfully!');
-        
-        // Refresh profile data
-        if (onUploadSuccess) {
-          await onUploadSuccess();
-        }
+        // Don't trigger refresh - just let user refresh manually if needed
         
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error("Avatar upload failed:", errorData);
-        throw new Error(errorData.error || errorData.message || `Upload failed (${response.status})`);
       }
 
     } catch (error) {
       console.error("Avatar upload error:", error);
-      toast.error(`Upload failed: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -90,7 +82,7 @@ const AvatarUploader = ({ onUploadSuccess }) => {
 };
 
 const Profile = () => {
-  const { user, deleteUser, token, loading, updateProfile } = useAuth(); 
+  const { user, deleteUser, token, loading } = useAuth(); 
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
   const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
@@ -105,12 +97,12 @@ const Profile = () => {
     }
   }, [token, loading, user, navigate]);
 
-  // Fetch profile data when component mounts
+  // Fetch profile data when component mounts (only once)
   useEffect(() => {
-    if (user && token) {
+    if (user && token && !fullUserData) {
       fetchFullUserProfile();
     }
-  }, [user, token]);
+  }, [user?.id, token]); // Only depend on user.id and token to prevent loops
 
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
@@ -167,21 +159,11 @@ const Profile = () => {
       
       console.log("Stats extracted:", { posts, comments, votes });
 
-      // Update auth context with fresh user data if needed
-      if (updateProfile) {
-        updateProfile(userData);
-      }
-
     } catch (error) {
       console.error("Profile data fetch error:", error);
       
       if (error.message.includes("401") || error.message.includes("Authentication")) {
-        toast.error("Authentication expired. Please log in again.");
         navigate("/login");
-      } else if (error.message.includes("404")) {
-        toast.error("Profile not found");
-      } else {
-        toast.error(`Failed to load profile: ${error.message}`);
       }
       
       setUserStats({ posts: 0, comments: 0, votes: 0 });
