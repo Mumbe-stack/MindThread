@@ -137,13 +137,14 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
+      // FIXED: Remove /api prefix from admin endpoints
+      const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       
       setStats(statsData);
 
       try {
-        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/activity-trends`);
+        const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/admin/activity-trends`);
         
         if (trendsResponse.ok) {
           const trendsData = await handleApiResponse(trendsResponse, "Failed to fetch trends");
@@ -223,6 +224,7 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
+      // Keep /api prefix for general users endpoint
       const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/users`);
       const data = await handleApiResponse(response, "Failed to fetch users");
       
@@ -241,8 +243,9 @@ const AdminDashboard = () => {
     
     setSearchingUsers(true);
     try {
+      // FIXED: Remove /api prefix from admin search endpoint
       const response = await makeAuthenticatedRequest(
-        `${VITE_API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`
+        `${VITE_API_URL}/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`
       );
       
       if (response.ok) {
@@ -273,11 +276,13 @@ const AdminDashboard = () => {
     try {
       let postsData = [];
       try {
-        const adminPostsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/posts`);
+        // FIXED: Remove /api prefix from admin posts endpoint
+        const adminPostsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/admin/posts`);
         if (adminPostsRes.ok) {
           const data = await handleApiResponse(adminPostsRes, "Failed to fetch admin posts");
           postsData = Array.isArray(data) ? data : (data.posts || []);
         } else {
+          // Keep /api prefix for general posts endpoint
           const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
           const data = await handleApiResponse(postsRes, "Failed to fetch posts");
           postsData = Array.isArray(data) ? data : (data.posts || []);
@@ -288,9 +293,10 @@ const AdminDashboard = () => {
 
       let commentsData = [];
       try {
+        // FIXED: Mixed endpoints - admin endpoints without /api, general endpoints with /api
         const adminCommentsEndpoints = [
-          `${VITE_API_URL}/api/admin/comments`,
-          `${VITE_API_URL}/api/admin/all-comments`,
+          `${VITE_API_URL}/admin/comments`,
+          `${VITE_API_URL}/admin/all-comments`,
           `${VITE_API_URL}/api/comments/all`
         ];
 
@@ -315,6 +321,7 @@ const AdminDashboard = () => {
           
           for (const post of postsToCheck) {
             try {
+              // Keep /api prefix for general post comments endpoint
               const postCommentsRes = await makeAuthenticatedRequest(
                 `${VITE_API_URL}/api/posts/${post.id}/comments`
               );
@@ -378,7 +385,8 @@ const AdminDashboard = () => {
       let flaggedCommentsData = [];
 
       try {
-        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
+        // FIXED: Remove /api prefix from admin flagged endpoints
+        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/admin/flagged/posts`);
         if (postsRes.ok) {
           const data = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
           flaggedPostsData = Array.isArray(data) ? data : (data.posts || []);
@@ -388,7 +396,7 @@ const AdminDashboard = () => {
       }
 
       try {
-        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/comments`);
+        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/admin/flagged/comments`);
         if (commentsRes.ok) {
           const data = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
           flaggedCommentsData = Array.isArray(data) ? data : (data.comments || []);
@@ -407,6 +415,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // FIXED: User actions with correct endpoints and logic
   const handleUserAction = async (userId, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -417,27 +426,31 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "block":
-          endpoint = `${VITE_API_URL}/api/admin/users/${userId}/block`;
+          // FIXED: Send specific state since backend now respects request body
+          endpoint = `${VITE_API_URL}/admin/users/${userId}/block`;
           body = JSON.stringify({ is_blocked: true });
           break;
         case "unblock":
-          endpoint = `${VITE_API_URL}/api/admin/users/${userId}/block`;
+          // FIXED: Send specific state since backend now respects request body
+          endpoint = `${VITE_API_URL}/admin/users/${userId}/block`;
           body = JSON.stringify({ is_blocked: false });
           break;
         case "delete":
           if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
             return;
           }
-          endpoint = `${VITE_API_URL}/api/admin/users/${userId}`;
+          endpoint = `${VITE_API_URL}/admin/users/${userId}`;
           method = "DELETE";
           break;
         case "make_admin":
-          endpoint = `${VITE_API_URL}/api/admin/users/${userId}`;
-          body = JSON.stringify({ is_admin: true });
+          // Backend still toggles admin status, so send empty body
+          endpoint = `${VITE_API_URL}/admin/users/${userId}/admin`;
+          body = JSON.stringify({});
           break;
         case "remove_admin":
-          endpoint = `${VITE_API_URL}/api/admin/users/${userId}`;
-          body = JSON.stringify({ is_admin: false });
+          // Backend still toggles admin status, so send empty body
+          endpoint = `${VITE_API_URL}/admin/users/${userId}/admin`;
+          body = JSON.stringify({});
           break;
       }
 
@@ -457,6 +470,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // FIXED: Content actions with correct endpoints (flagging still toggles)
   const handleContentAction = async (type, id, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -467,26 +481,24 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/admin/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/admin/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
-          body = JSON.stringify({ is_flagged: true });
-          break;
         case "unflag":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
-          body = JSON.stringify({ is_flagged: false });
+          // Backend still toggles flag status, so send empty body
+          endpoint = `${VITE_API_URL}/admin/${type}s/${id}/flag`;
+          body = JSON.stringify({});
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
             return;
           }
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}`;
+          endpoint = `${VITE_API_URL}/admin/${type}s/${id}`;
           method = "DELETE";
           break;
       }

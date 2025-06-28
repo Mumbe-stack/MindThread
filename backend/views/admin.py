@@ -597,10 +597,12 @@ def get_all_comments():
         return jsonify({"error": "Failed to fetch comments"}), 500
 
 # User management endpoints
+# Replace the existing toggle_block_user function in admin.py with this:
+
 @admin_bp.route("/admin/users/<int:user_id>/block", methods=["PATCH"])
 @admin_required
 def toggle_block_user(user_id):
-    """Toggle user block status"""
+    """Block or unblock user based on request body"""
     try:
         user = User.query.get_or_404(user_id)
         
@@ -609,7 +611,17 @@ def toggle_block_user(user_id):
         if user_id == int(current_user_id):
             return jsonify({"error": "Cannot block yourself"}), 400
         
-        user.is_blocked = not user.is_blocked
+        # Get the desired state from request body
+        data = request.get_json() or {}
+        
+        if "is_blocked" in data:
+            # Frontend is setting a specific state
+            new_blocked_state = bool(data["is_blocked"])
+        else:
+            # Fallback to toggle behavior
+            new_blocked_state = not user.is_blocked
+        
+        user.is_blocked = new_blocked_state
         if hasattr(user, 'updated_at'):
             user.updated_at = datetime.now(timezone.utc)
         db.session.commit()
@@ -627,8 +639,9 @@ def toggle_block_user(user_id):
         
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error toggling user block: {e}")
+        current_app.logger.error(f"Error updating user block status: {e}")
         return jsonify({"error": "Failed to update user status"}), 500
+    
 
 @admin_bp.route("/admin/users/<int:user_id>", methods=["DELETE"])
 @admin_required
