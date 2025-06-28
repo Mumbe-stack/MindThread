@@ -455,3 +455,5 @@ def test_comments():
         current_app.logger.error(f"Error in test endpoint: {e}")
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Test failed: {str(e)}"}), 500
+    
+    
