@@ -38,10 +38,7 @@ function App() {
           <Route path="/posts/new" element={user ? <AddPost /> : <Navigate to="/login" />} />
           <Route path="/posts/:id" element={<SinglePost />} />
           <Route path="/posts/:id/edit" element={user ? <EditPost /> : <Navigate to="/login" />} />
-          
-          
-          <Route path="/404" element={<NotFound />} />
-          
+
          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
