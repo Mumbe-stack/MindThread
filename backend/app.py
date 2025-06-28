@@ -17,32 +17,24 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Enhanced CORS Configuration
+# Enhanced CORS Configuration - SIMPLIFIED
 CORS(
     app,
-    resources={
-        r"/api/*": {
-            "origins": [
-                "https://mindthread-1.onrender.com",              
-                "https://mindthreadbloggingapp.netlify.app",      
-                "http://localhost:5173",
-                "http://localhost:3000",  # Added for React dev server
-                "http://127.0.0.1:5173",  # Added for local development
-                "http://127.0.0.1:3000"   # Added for local development
-            ],
-            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            "allow_headers": [
-                "Content-Type", 
-                "Authorization", 
-                "Access-Control-Allow-Credentials",
-                "Access-Control-Allow-Origin"
-            ],
-            "expose_headers": ["Content-Range", "X-Content-Range"]
-        }
-    },
+    origins=[
+        "https://mindthreadbloggingapp.netlify.app",      
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000"
+    ],
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type", 
+        "Authorization",
+        "Access-Control-Allow-Credentials"
+    ],
     supports_credentials=True,
-    allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    max_age=3600  # Cache preflight for 1 hour
 )
 
 # Database Configuration
@@ -268,15 +260,7 @@ def service_unavailable(error):
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# Handle preflight OPTIONS requests
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add('Access-Control-Allow-Headers', "*")
-        response.headers.add('Access-Control-Allow-Methods', "*")
-        return response
+# REMOVED the conflicting handle_preflight function that was causing CORS issues
 
 # Register Blueprints with proper URL prefixes to match frontend expectations
 try:
@@ -540,19 +524,6 @@ def after_request(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
-    
-    # CORS headers for better compatibility
-    origin = request.headers.get('Origin')
-    if origin in [
-        "https://mindthread-1.onrender.com",              
-        "https://mindthreadbloggingapp.netlify.app",      
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000"
-    ]:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
     
     # Log response for debugging
     if app.debug or os.environ.get("FLASK_ENV") == "development":
