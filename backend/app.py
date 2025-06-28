@@ -2,7 +2,7 @@ from datetime import timedelta
 from flask import send_from_directory
 import os
 import logging
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_mail import Mail
@@ -268,7 +268,17 @@ def service_unavailable(error):
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# 🔧 FIXED: Register Blueprints with proper URL prefixes to match frontend expectations
+# Handle preflight OPTIONS requests
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
+
+# Register Blueprints with proper URL prefixes to match frontend expectations
 try:
     # Frontend expects: /api/posts, /api/comments, etc.
     # So we register blueprints with /api prefix and let each blueprint define its routes
@@ -277,11 +287,11 @@ try:
     app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
     app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
     app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
-    app.register_blueprint(admin_bp, url_prefix="/api")     # 🔧 FIXED: Changed from "/api/admin" to "/api" since admin.py routes already have "/admin" prefix
+    app.register_blueprint(admin_bp, url_prefix="/api")     # admin_bp already has "/admin" prefix in routes
     app.register_blueprint(home_bp)                         # home_bp for root routes
-    logger.info("All blueprints registered successfully")
+    logger.info("✅ All blueprints registered successfully")
 except Exception as e:
-    logger.error(f"Error registering blueprints: {e}")
+    logger.error(f"❌ Error registering blueprints: {e}")
 
 # Health Check Endpoint
 @app.route('/api/health', methods=['GET'])
@@ -298,9 +308,18 @@ def health_check():
     return jsonify({
         "status": "healthy" if db_status == "healthy" else "degraded",
         "database": db_status,
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "features": {
+            "post_approval": True,
+            "comment_approval": True,
+            "admin_dashboard": True,
+            "voting_system": True,
+            "like_system": True,
+            "user_management": True,
+            "content_flagging": True
+        },
         "environment": os.environ.get("FLASK_ENV", "production"),
-        "timestamp": os.times().elapsed
+        "timestamp": str(os.times().elapsed) if hasattr(os, 'times') else "unavailable"
     }), 200 if db_status == "healthy" else 503
 
 # API Info Endpoint
@@ -309,19 +328,67 @@ def api_info():
     """API information endpoint"""
     return jsonify({
         "name": "MindThread API",
-        "version": "1.0.0",
-        "description": "A modern blogging platform API",
+        "version": "2.0.0",
+        "description": "A modern blogging platform API with approval system",
         "endpoints": {
-            "auth": "/api/auth",
-            "posts": "/api/posts", 
-            "comments": "/api/comments",
-            "users": "/api/users",
-            "votes": "/api/votes",
-            "admin": "/api/admin",
+            "auth": "/api/auth/*",
+            "posts": "/api/posts/*", 
+            "comments": "/api/comments/*",
+            "users": "/api/users/*",
+            "votes": "/api/votes/*",
+            "admin": "/api/admin/*",
             "health": "/api/health"
         },
+        "features": {
+            "post_approval_system": "Posts require admin approval before being visible",
+            "comment_approval_system": "Comments require admin approval before being visible", 
+            "username_display": "Proper username display throughout the platform",
+            "admin_dashboard": "Comprehensive admin dashboard with statistics",
+            "voting_system": "Upvote/downvote system for posts and comments",
+            "like_system": "Like system for posts and comments",
+            "content_flagging": "Admin can flag inappropriate content",
+            "user_management": "Admin can manage users (block, promote, etc.)"
+        },
+        "authentication": "JWT-based authentication with refresh tokens",
         "documentation": "https://mindthread-1.onrender.com/api/docs"
     }), 200
+
+# API Status Endpoint (for monitoring)
+@app.route('/api/status', methods=['GET'])
+def api_status():
+    """API status endpoint for monitoring"""
+    try:
+        from models import User, Post, Comment, Vote, Like
+        
+        # Test database and get basic stats
+        total_users = User.query.count()
+        total_posts = Post.query.count()
+        total_comments = Comment.query.count()
+        
+        # Test approval system
+        approval_system_active = hasattr(Post, 'is_approved') and hasattr(Comment, 'is_approved')
+        flagging_system_active = hasattr(Post, 'is_flagged') and hasattr(Comment, 'is_flagged')
+        
+        return jsonify({
+            "api_status": "operational",
+            "database_status": "connected",
+            "approval_system": "active" if approval_system_active else "inactive",
+            "flagging_system": "active" if flagging_system_active else "inactive",
+            "statistics": {
+                "total_users": total_users,
+                "total_posts": total_posts,
+                "total_comments": total_comments
+            },
+            "last_checked": str(os.times().elapsed) if hasattr(os, 'times') else "unavailable"
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Status check failed: {e}")
+        return jsonify({
+            "api_status": "degraded",
+            "database_status": "error",
+            "error": str(e)
+        }), 503
 
 def create_upload_dirs():
     """Create necessary upload directories"""
@@ -335,9 +402,9 @@ def create_upload_dirs():
     for directory in upload_dirs:
         try:
             os.makedirs(directory, exist_ok=True)
-            logger.info(f"Created directory: {directory}")
+            logger.info(f"✅ Created directory: {directory}")
         except Exception as e:
-            logger.error(f"Failed to create directory {directory}: {e}")
+            logger.error(f"❌ Failed to create directory {directory}: {e}")
 
 def validate_environment():
     """Validate required environment variables"""
@@ -352,9 +419,41 @@ def validate_environment():
         warnings.append("DATABASE_URL not set - using default database")
     
     for warning in warnings:
-        logger.warning(warning)
+        logger.warning(f"⚠️  {warning}")
     
     return len(required_vars) == 0
+
+def check_model_compatibility():
+    """Check if models have required approval system fields"""
+    try:
+        from models import Post, Comment
+        
+        # Check Post model
+        post_has_approval = hasattr(Post, 'is_approved')
+        post_has_flagging = hasattr(Post, 'is_flagged')
+        
+        # Check Comment model  
+        comment_has_approval = hasattr(Comment, 'is_approved')
+        comment_has_flagging = hasattr(Comment, 'is_flagged')
+        
+        if post_has_approval and comment_has_approval:
+            logger.info("✅ Approval system fields found in models")
+        else:
+            logger.warning("⚠️  Approval system fields missing - run migration script")
+            
+        if post_has_flagging and comment_has_flagging:
+            logger.info("✅ Flagging system fields found in models")
+        else:
+            logger.warning("⚠️  Flagging system fields missing - run migration script")
+            
+        return {
+            "approval_system": post_has_approval and comment_has_approval,
+            "flagging_system": post_has_flagging and comment_has_flagging
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Model compatibility check failed: {e}")
+        return {"approval_system": False, "flagging_system": False}
 
 # Application Context Setup
 with app.app_context():
@@ -365,6 +464,9 @@ with app.app_context():
         # Create database tables
         db.create_all()
         logger.info("✅ Database tables created successfully")
+        
+        # Check model compatibility
+        model_status = check_model_compatibility()
         
         # Create upload directories
         create_upload_dirs()
@@ -384,15 +486,15 @@ with app.app_context():
         # Check critical routes that frontend expects
         logger.info("🔍 Critical Routes Check:")
         critical_routes = [
-            '/api/login',           # CORRECTED: Actual working auth routes
-            '/api/register',        # CORRECTED: Actual working auth routes
-            '/api/posts',
-            '/api/posts/<',         # For dynamic routes like /api/posts/<id>
-            '/api/comments',
-            '/api/users',
-            '/api/votes/post',
-            '/api/admin/stats',     # This should now work correctly
-            '/api/health'
+            '/api/login',           # Auth routes
+            '/api/register',        # Auth routes
+            '/api/posts',           # Post routes
+            '/api/posts/<',         # Dynamic post routes
+            '/api/comments',        # Comment routes
+            '/api/users',           # User routes
+            '/api/votes/post',      # Vote routes
+            '/api/admin/stats',     # Admin routes
+            '/api/health'           # Health check
         ]
         
         all_routes = [rule.rule for rule in app.url_map.iter_rules()]
@@ -402,7 +504,13 @@ with app.app_context():
             status = '✅ Found' if found else '❌ Missing'
             logger.info(f"   {status}: {route}")
         
-        logger.info("✅ Application initialized successfully")
+        # Log system status
+        logger.info("🎯 System Status:")
+        logger.info(f"   ✅ Database: Connected")
+        logger.info(f"   {'✅' if model_status['approval_system'] else '⚠️ '} Approval System: {'Active' if model_status['approval_system'] else 'Inactive'}")
+        logger.info(f"   {'✅' if model_status['flagging_system'] else '⚠️ '} Flagging System: {'Active' if model_status['flagging_system'] else 'Inactive'}")
+        
+        logger.info("✅ MindThread API initialized successfully")
         
     except Exception as e:
         logger.error(f"❌ Application initialization error: {e}")
@@ -416,8 +524,14 @@ def log_request_info():
     """Log request information for debugging"""
     if app.debug or os.environ.get("FLASK_ENV") == "development":
         logger.debug(f"Request: {request.method} {request.url}")
-        if request.is_json:
-            logger.debug(f"JSON Data: {request.get_json()}")
+        if request.is_json and request.method != 'GET':
+            try:
+                data = request.get_json()
+                # Don't log sensitive data
+                if data and not any(field in str(data) for field in ['password', 'token', 'secret']):
+                    logger.debug(f"JSON Data: {data}")
+            except:
+                pass
 
 @app.after_request
 def after_request(response):
@@ -426,6 +540,19 @@ def after_request(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # CORS headers for better compatibility
+    origin = request.headers.get('Origin')
+    if origin in [
+        "https://mindthread-1.onrender.com",              
+        "https://mindthreadbloggingapp.netlify.app",      
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000"
+    ]:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
     
     # Log response for debugging
     if app.debug or os.environ.get("FLASK_ENV") == "development":
@@ -440,6 +567,7 @@ if __name__ == "__main__":
     logger.info(f"🚀 Starting MindThread API on port {port}")
     logger.info(f"🔧 Debug mode: {debug_mode}")
     logger.info(f"🌐 Environment: {os.environ.get('FLASK_ENV', 'production')}")
+    logger.info(f"📊 Features: Approval System, Admin Dashboard, Voting, Likes")
     
     app.run(
         host="0.0.0.0", 

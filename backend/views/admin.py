@@ -3,9 +3,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, and_, or_
-from models import db, User, Post, Comment, Vote
+from models import db, User, Post, Comment, Vote, Like
+import logging
 
-# FIXED: Remove url_prefix since app.py handles it
+logger = logging.getLogger(__name__)
+
 admin_bp = Blueprint("admin", __name__)
 
 def admin_required(fn):
@@ -46,16 +48,20 @@ def admin_stats():
         total_posts = Post.query.count()
         total_comments = Comment.query.count()
         total_votes = Vote.query.count()
+        total_likes = Like.query.count()
         
-        # Status counts
+        # User status counts
         blocked_users = User.query.filter_by(is_blocked=True).count()
         admin_users = User.query.filter_by(is_admin=True).count()
+        active_users = User.query.filter_by(is_active=True).count()
         
-        # Flagged content counts (with safe attribute checking)
+        # Approval status counts (with safe attribute checking)
         flagged_posts = 0
         flagged_comments = 0
         pending_posts = 0
         pending_comments = 0
+        approved_posts = 0
+        approved_comments = 0
         
         try:
             if hasattr(Post, 'is_flagged'):
@@ -64,8 +70,14 @@ def admin_stats():
                 flagged_comments = Comment.query.filter_by(is_flagged=True).count()
             if hasattr(Post, 'is_approved'):
                 pending_posts = Post.query.filter_by(is_approved=False).count()
+                approved_posts = Post.query.filter_by(is_approved=True).count()
+            else:
+                approved_posts = total_posts
             if hasattr(Comment, 'is_approved'):
                 pending_comments = Comment.query.filter_by(is_approved=False).count()
+                approved_comments = Comment.query.filter_by(is_approved=True).count()
+            else:
+                approved_comments = total_comments
         except Exception as e:
             current_app.logger.warning(f"Error fetching flagged/pending counts: {e}")
         
@@ -82,17 +94,32 @@ def admin_stats():
         today_comments = Comment.query.filter(func.date(Comment.created_at) == today).count()
         
         stats = {
+            # Basic totals
             "users": total_users,
             "posts": total_posts,
             "comments": total_comments,
             "votes": total_votes,
-            "flagged": flagged_posts + flagged_comments,
+            "likes": total_likes,
+            
+            # Content status
+            "approved_posts": approved_posts,
+            "unapproved_posts": pending_posts,
             "flagged_posts": flagged_posts,
+            "approved_comments": approved_comments,
+            "unapproved_comments": pending_comments,
             "flagged_comments": flagged_comments,
-            "blocked_users": blocked_users,
-            "admin_users": admin_users,
+            
+            # Legacy fields for compatibility
+            "flagged": flagged_posts + flagged_comments,
             "pending_posts": pending_posts,
             "pending_comments": pending_comments,
+            
+            # User status
+            "active_users": active_users,
+            "blocked_users": blocked_users,
+            "admin_users": admin_users,
+            
+            # Recent activity
             "recent_activity": {
                 "users": recent_users,
                 "posts": recent_posts,
@@ -102,15 +129,19 @@ def admin_stats():
                 "users": today_users,
                 "posts": today_posts,
                 "comments": today_comments
-            }
+            },
+            
+            # Ratios for dashboard
+            "approval_rate": round((approved_posts / total_posts * 100) if total_posts > 0 else 0, 1),
+            "comment_approval_rate": round((approved_comments / total_comments * 100) if total_comments > 0 else 0, 1)
         }
         
-        current_app.logger.info(f"Admin stats retrieved: {stats}")
+        current_app.logger.info(f"Admin stats retrieved successfully")
         return jsonify(stats), 200
         
     except Exception as e:
         current_app.logger.error(f"Error fetching admin stats: {e}")
-        return jsonify({"error": "Failed to fetch admin stats"}), 500
+        return jsonify({"error": "Failed to fetch admin stats", "message": str(e)}), 500
 
 @admin_bp.route("/admin/activity-trends", methods=["GET"])
 @admin_required
@@ -151,7 +182,7 @@ def get_activity_trends():
             "votes": daily_votes
         }
         
-        current_app.logger.info(f"Activity trends retrieved: {trends_data}")
+        current_app.logger.info(f"Activity trends retrieved successfully")
         return jsonify(trends_data), 200
         
     except Exception as e:
@@ -211,17 +242,38 @@ def get_flagged_posts():
         if not hasattr(Post, 'is_flagged'):
             return jsonify({"flagged_posts": [], "count": 0}), 200
             
-        posts = Post.query.filter_by(is_flagged=True).order_by(Post.created_at.desc()).all()
+        posts = Post.query.join(User, Post.user_id == User.id)\
+                         .filter(Post.is_flagged == True)\
+                         .order_by(Post.created_at.desc())\
+                         .all()
         
         posts_data = []
         for post in posts:
-            post_dict = post.to_dict(include_author=True)
-            # Add extra information
-            post_dict.update({
-                "flagged_at": post.updated_at.isoformat() if hasattr(post, 'updated_at') and post.updated_at else post.created_at.isoformat(),
-                "comments_count": post.comments.count(),
-                "approved_comments": post.comments.filter_by(is_approved=True).count() if hasattr(Comment, 'is_approved') else post.comments.count()
-            })
+            try:
+                post_dict = post.to_dict(include_author=True)
+                # Add extra information
+                post_dict.update({
+                    "flagged_at": post.updated_at.isoformat() if hasattr(post, 'updated_at') and post.updated_at else post.created_at.isoformat(),
+                    "comments_count": post.comments.count(),
+                    "likes_count": post.likes_count,
+                    "vote_score": post.vote_score,
+                    "approved_comments": post.comments.filter_by(is_approved=True).count() if hasattr(Comment, 'is_approved') else post.comments.count()
+                })
+            except Exception as e:
+                # Fallback to basic serialization
+                post_dict = {
+                    "id": post.id,
+                    "title": post.title,
+                    "content": post.content,
+                    "user_id": post.user_id,
+                    "author": {
+                        "id": post.user.id,
+                        "username": post.user.username
+                    } if post.user else {"id": None, "username": "Unknown"},
+                    "created_at": post.created_at.isoformat(),
+                    "is_flagged": getattr(post, 'is_flagged', False),
+                    "is_approved": getattr(post, 'is_approved', True)
+                }
             posts_data.append(post_dict)
         
         return jsonify({
@@ -241,17 +293,38 @@ def get_flagged_comments():
         if not hasattr(Comment, 'is_flagged'):
             return jsonify({"flagged_comments": [], "count": 0}), 200
             
-        comments = Comment.query.filter_by(is_flagged=True).order_by(Comment.created_at.desc()).all()
+        comments = Comment.query.join(User, Comment.user_id == User.id)\
+                              .filter(Comment.is_flagged == True)\
+                              .order_by(Comment.created_at.desc())\
+                              .all()
         
         comments_data = []
         for comment in comments:
-            comment_dict = comment.to_dict(include_author=True)
-            # Add extra information
-            comment_dict.update({
-                "flagged_at": comment.updated_at.isoformat() if hasattr(comment, 'updated_at') and comment.updated_at else comment.created_at.isoformat(),
-                "post_title": comment.post.title if comment.post else "Unknown Post",
-                "parent_comment_id": comment.parent_id
-            })
+            try:
+                comment_dict = comment.to_dict(include_author=True)
+                # Add extra information
+                comment_dict.update({
+                    "flagged_at": comment.updated_at.isoformat() if hasattr(comment, 'updated_at') and comment.updated_at else comment.created_at.isoformat(),
+                    "post_title": comment.post.title if comment.post else "Unknown Post",
+                    "parent_comment_id": comment.parent_id,
+                    "likes_count": comment.likes_count,
+                    "vote_score": comment.vote_score
+                })
+            except Exception as e:
+                # Fallback to basic serialization
+                comment_dict = {
+                    "id": comment.id,
+                    "content": comment.content,
+                    "user_id": comment.user_id,
+                    "post_id": comment.post_id,
+                    "author": {
+                        "id": comment.user.id,
+                        "username": comment.user.username
+                    } if comment.user else {"id": None, "username": "Unknown"},
+                    "created_at": comment.created_at.isoformat(),
+                    "is_flagged": getattr(comment, 'is_flagged', False),
+                    "is_approved": getattr(comment, 'is_approved', True)
+                }
             comments_data.append(comment_dict)
         
         return jsonify({
@@ -342,16 +415,27 @@ def get_all_posts():
         
         # Get search parameter
         search = request.args.get('search', '').strip()
+        status = request.args.get('status', 'all')  # 'all', 'approved', 'unapproved', 'flagged'
         
-        # Build query
-        query = Post.query
+        # Build query with join for author information
+        query = Post.query.join(User, Post.user_id == User.id)
+        
         if search:
             query = query.filter(
                 or_(
                     Post.title.ilike(f'%{search}%'),
-                    Post.content.ilike(f'%{search}%')
+                    Post.content.ilike(f'%{search}%'),
+                    User.username.ilike(f'%{search}%')
                 )
             )
+        
+        # Filter by status
+        if status == 'approved' and hasattr(Post, 'is_approved'):
+            query = query.filter(Post.is_approved == True)
+        elif status == 'unapproved' and hasattr(Post, 'is_approved'):
+            query = query.filter(Post.is_approved == False)
+        elif status == 'flagged' and hasattr(Post, 'is_flagged'):
+            query = query.filter(Post.is_flagged == True)
         
         # Order by creation date (newest first)
         query = query.order_by(Post.created_at.desc())
@@ -368,24 +452,13 @@ def get_all_posts():
         posts_data = []
         for post in posts:
             try:
-                post_dict = post.to_dict(include_author=True)
-                # Add extra stats for each post
-                post_dict.update({
-                    "comments_count": post.comments.count(),
-                    "likes_count": getattr(post, 'likes_count', 0),
-                    "vote_score": getattr(post, 'vote_score', 0),
-                    "upvotes_count": getattr(post, 'upvotes_count', 0),
-                    "downvotes_count": getattr(post, 'downvotes_count', 0)
-                })
+                # Use the model's to_dict method with current user context
+                current_user_id = get_jwt_identity()
+                current_user = User.query.get(current_user_id)
+                post_dict = post.to_dict(include_author=True, current_user=current_user)
                 
-                # Add approval/flag status if available
-                if hasattr(Post, 'is_approved'):
-                    post_dict["is_approved"] = getattr(post, 'is_approved', True)
-                if hasattr(Post, 'is_flagged'):
-                    post_dict["is_flagged"] = getattr(post, 'is_flagged', False)
-                    
             except Exception as e:
-                current_app.logger.warning(f"Error adding post stats for post {post.id}: {e}")
+                current_app.logger.warning(f"Error serializing post {post.id}: {e}")
                 # Fallback to basic dict
                 post_dict = {
                     "id": post.id,
@@ -394,9 +467,15 @@ def get_all_posts():
                     "created_at": post.created_at.isoformat(),
                     "user_id": post.user_id,
                     "author": {
-                        "id": post.user_id,
-                        "username": post.user.username if post.user else "Unknown"
-                    }
+                        "id": post.user.id,
+                        "username": post.user.username,
+                        "avatar_url": getattr(post.user, 'avatar_url', None)
+                    } if post.user else {"id": None, "username": "Unknown"},
+                    "is_approved": getattr(post, 'is_approved', True),
+                    "is_flagged": getattr(post, 'is_flagged', False),
+                    "comments_count": post.comments.count(),
+                    "likes_count": post.likes.count() if hasattr(post, 'likes') else 0,
+                    "vote_score": sum(vote.value for vote in post.votes) if hasattr(post, 'votes') else 0
                 }
                 
             posts_data.append(post_dict)
@@ -437,8 +516,8 @@ def get_all_comments():
         post_id = request.args.get('post_id', type=int)
         user_id = request.args.get('user_id', type=int)
         
-        # Build query
-        query = Comment.query
+        # Build query with join for author information
+        query = Comment.query.join(User, Comment.user_id == User.id)
         
         if search:
             query = query.filter(Comment.content.ilike(f'%{search}%'))
@@ -464,24 +543,18 @@ def get_all_comments():
         comments_data = []
         for comment in comments:
             try:
-                comment_dict = comment.to_dict(include_author=True)
+                # Use the model's to_dict method with current user context
+                current_user_id = get_jwt_identity()
+                current_user = User.query.get(current_user_id)
+                comment_dict = comment.to_dict(include_author=True, current_user=current_user)
+                
                 # Add extra information
                 comment_dict.update({
-                    "post_title": comment.post.title if comment.post else "Unknown Post",
-                    "likes_count": getattr(comment, 'likes_count', 0),
-                    "vote_score": getattr(comment, 'vote_score', 0),
-                    "upvotes_count": getattr(comment, 'upvotes_count', 0),
-                    "downvotes_count": getattr(comment, 'downvotes_count', 0)
+                    "post_title": comment.post.title if comment.post else "Unknown Post"
                 })
                 
-                # Add approval/flag status if available
-                if hasattr(Comment, 'is_approved'):
-                    comment_dict["is_approved"] = getattr(comment, 'is_approved', True)
-                if hasattr(Comment, 'is_flagged'):
-                    comment_dict["is_flagged"] = getattr(comment, 'is_flagged', False)
-                    
             except Exception as e:
-                current_app.logger.warning(f"Error adding comment stats for comment {comment.id}: {e}")
+                current_app.logger.warning(f"Error serializing comment {comment.id}: {e}")
                 # Fallback to basic dict
                 comment_dict = {
                     "id": comment.id,
@@ -490,9 +563,15 @@ def get_all_comments():
                     "post_id": comment.post_id,
                     "user_id": comment.user_id,
                     "author": {
-                        "id": comment.user_id,
-                        "username": comment.user.username if comment.user else "Unknown"
-                    }
+                        "id": comment.user.id,
+                        "username": comment.user.username,
+                        "avatar_url": getattr(comment.user, 'avatar_url', None)
+                    } if comment.user else {"id": None, "username": "Unknown"},
+                    "is_approved": getattr(comment, 'is_approved', True),
+                    "is_flagged": getattr(comment, 'is_flagged', False),
+                    "post_title": comment.post.title if comment.post else "Unknown Post",
+                    "likes_count": comment.likes.count() if hasattr(comment, 'likes') else 0,
+                    "vote_score": sum(vote.value for vote in comment.votes) if hasattr(comment, 'votes') else 0
                 }
                 
             comments_data.append(comment_dict)
@@ -522,13 +601,16 @@ def get_all_comments():
 def get_all_comments_simple():
     """Simple endpoint to get all comments (alternative route)"""
     try:
-        comments = Comment.query.order_by(Comment.created_at.desc()).all()
+        comments = Comment.query.join(User, Comment.user_id == User.id)\
+                              .order_by(Comment.created_at.desc())\
+                              .all()
         comments_data = []
         
         for comment in comments:
             try:
-                comment_dict = comment.to_dict(include_author=True)
-                comments_data.append(comment_dict)
+                current_user_id = get_jwt_identity()
+                current_user = User.query.get(current_user_id)
+                comment_dict = comment.to_dict(include_author=True, current_user=current_user)
             except Exception as e:
                 # Fallback to basic dict if to_dict fails
                 comment_dict = {
@@ -538,11 +620,11 @@ def get_all_comments_simple():
                     "post_id": comment.post_id,
                     "user_id": comment.user_id,
                     "author": {
-                        "id": comment.user_id,
-                        "username": comment.user.username if comment.user else "Unknown"
-                    }
+                        "id": comment.user.id,
+                        "username": comment.user.username
+                    } if comment.user else {"id": None, "username": "Unknown"}
                 }
-                comments_data.append(comment_dict)
+            comments_data.append(comment_dict)
         
         return jsonify(comments_data), 200
         
@@ -734,7 +816,7 @@ def toggle_admin_status(user_id):
         current_app.logger.error(f"Error toggling admin status: {e}")
         return jsonify({"error": "Failed to update admin status"}), 500
 
-# 🔧 FIXED: Content management endpoints with proper error handling
+# Content management endpoints with proper error handling
 @admin_bp.route("/admin/posts/<int:post_id>/approve", methods=["PATCH"])
 @admin_required
 def approve_post(post_id):
@@ -772,8 +854,7 @@ def approve_post(post_id):
         current_app.logger.error(f"Error approving post: {e}")
         return jsonify({"error": f"Failed to update post approval status: {str(e)}"}), 500
 
-@admin_bp.route('/posts/<int:post_id>/flag', methods=['PATCH'])
-@jwt_required()
+@admin_bp.route('/admin/posts/<int:post_id>/flag', methods=['PATCH'])
 @admin_required
 def flag_post(post_id):
     """Flag or unflag a post"""
@@ -847,8 +928,7 @@ def approve_comment_admin(comment_id):
         current_app.logger.error(f"Error approving comment: {e}")
         return jsonify({"error": f"Failed to update comment approval status: {str(e)}"}), 500
 
-@admin_bp.route('/comments/<int:post_id>/flag', methods=['PATCH'])
-@jwt_required
+@admin_bp.route('/admin/comments/<int:comment_id>/flag', methods=['PATCH'])
 @admin_required
 def flag_comment_admin(comment_id):
     """Flag or unflag a comment (admin endpoint)"""
@@ -983,7 +1063,7 @@ def admin_health_check():
         "version": "1.0.0"
     }), 200
 
-# 🔧 Test endpoint to verify admin endpoints work
+# Test endpoint to verify admin endpoints work
 @admin_bp.route("/admin/test", methods=["GET"])
 @admin_required
 def test_admin_endpoints():
@@ -997,10 +1077,12 @@ def test_admin_endpoints():
             "success": True,
             "message": "Admin endpoints working",
             "model_attributes": {
-                "post_has_flags": has_post_flags,
-                "comment_has_flags": has_comment_flags,
-                "post_attributes": [attr for attr in dir(Post) if not attr.startswith('_')],
-                "comment_attributes": [attr for attr in dir(Comment) if not attr.startswith('_')]
+                "post_has_approval_flags": has_post_flags,
+                "comment_has_approval_flags": has_comment_flags,
+                "post_approval": hasattr(Post, 'is_approved'),
+                "post_flagging": hasattr(Post, 'is_flagged'),
+                "comment_approval": hasattr(Comment, 'is_approved'),
+                "comment_flagging": hasattr(Comment, 'is_flagged')
             },
             "available_endpoints": [
                 "GET /api/admin/stats",

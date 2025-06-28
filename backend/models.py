@@ -13,7 +13,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_blocked = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    avatar_url = db.Column(db.String(255), nullable=True)  # 🔧 ADDED: Avatar support
+    avatar_url = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -31,7 +31,7 @@ class User(db.Model):
             "is_admin": self.is_admin,
             "is_blocked": self.is_blocked,
             "is_active": self.is_active,
-            "avatar_url": self.avatar_url,  # 🔧 ADDED: Include avatar in dict
+            "avatar_url": self.avatar_url,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
@@ -51,7 +51,7 @@ class Post(db.Model):
 
     # Approval and flagging fields
     is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    is_approved = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Changed default to False
 
     # Foreign key
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
@@ -89,7 +89,7 @@ class Post(db.Model):
 
     @property
     def comments_count(self):
-        """Get the number of comments (approved only for regular users)"""
+        """Get the number of approved comments"""
         return self.comments.filter_by(is_approved=True).count()
 
     def to_dict(self, include_author=True, current_user=None):
@@ -117,16 +117,18 @@ class Post(db.Model):
             data['author'] = {
                 'id': self.user.id,
                 'username': self.user.username,
-                'avatar_url': self.user.avatar_url  # 🔧 ADDED: Include author avatar
+                'avatar_url': self.user.avatar_url
             }
 
         # Add user's vote and like status if current_user is provided
         if current_user:
             user_vote = self.votes.filter_by(user_id=current_user.id).first()
             data['user_vote'] = user_vote.value if user_vote else None
+            data['userVote'] = user_vote.value if user_vote else None  # For compatibility
             
             user_like = self.likes.filter_by(user_id=current_user.id).first()
             data['user_liked'] = user_like is not None
+            data['liked_by_user'] = user_like is not None  # For compatibility
         
         return data
 
@@ -148,7 +150,7 @@ class Comment(db.Model):
 
     # Approval and flagging fields
     is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    is_approved = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Changed default to False
 
     # Relationships
     votes = db.relationship('Vote', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
@@ -185,7 +187,7 @@ class Comment(db.Model):
 
     @property
     def replies_count(self):
-        """Get the number of replies (approved only)"""
+        """Get the number of approved replies"""
         return self.replies.filter_by(is_approved=True).count()
 
     def to_dict(self, include_author=True, current_user=None):
@@ -213,16 +215,18 @@ class Comment(db.Model):
             data['author'] = {
                 'id': self.user.id,
                 'username': self.user.username,
-                'avatar_url': self.user.avatar_url  # 🔧 ADDED: Include author avatar
+                'avatar_url': self.user.avatar_url
             }
 
         # Add user's vote and like status if current_user is provided
         if current_user:
             user_vote = self.votes.filter_by(user_id=current_user.id).first()
             data['user_vote'] = user_vote.value if user_vote else None
+            data['userVote'] = user_vote.value if user_vote else None  # For compatibility
             
             user_like = self.likes.filter_by(user_id=current_user.id).first()
             data['user_liked'] = user_like is not None
+            data['liked_by_user'] = user_like is not None  # For compatibility
         
         return data
 

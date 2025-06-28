@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_req
 from models import db, Comment, User, Post, Vote, Like
 from datetime import datetime, timezone
 import traceback
+import logging
 
 # Import utils if available, otherwise define a simple decorator
 try:
@@ -22,17 +23,85 @@ except ImportError:
         wrapper.__name__ = f.__name__
         return wrapper
 
+logger = logging.getLogger(__name__)
+
 comment_bp = Blueprint('comments', __name__)
 
-@comment_bp.route("/comments", methods=["GET"])
-def list_comments():
-    """Get comments for a specific post or user - ADMINS can get all comments"""
+def serialize_comment_with_stats(comment, current_user_id=None):
+    """Serialize comment with all stats and user information"""
     try:
-        post_id = request.args.get("post_id")
-        user_id = request.args.get("user_id")
-        all_comments = request.args.get("all", "").lower() == "true"
-        admin_mode = request.args.get("admin", "").lower() == "true"
+        # Get vote statistics
+        upvotes = Vote.query.filter_by(comment_id=comment.id, value=1).count()
+        downvotes = Vote.query.filter_by(comment_id=comment.id, value=-1).count()
+        vote_score = upvotes - downvotes
+        
+        user_vote = None
+        if current_user_id:
+            uv = Vote.query.filter_by(comment_id=comment.id, user_id=current_user_id).first()
+            user_vote = uv.value if uv else None
+        
+        likes_count = Like.query.filter_by(comment_id=comment.id).count()
+        liked_by_user = False
+        if current_user_id:
+            liked_by_user = (
+                Like.query.filter_by(comment_id=comment.id, user_id=current_user_id).first()
+                is not None
+            )
+        
+        author = User.query.get(comment.user_id)
+        
+        return {
+            'id': comment.id,
+            'content': comment.content,
+            'post_id': comment.post_id,
+            'user_id': comment.user_id,
+            'parent_id': comment.parent_id,
+            'author': {
+                'id': author.id,
+                'username': author.username,
+                'avatar_url': getattr(author, 'avatar_url', None)
+            } if author else {"id": None, "username": "Unknown"},
+            'username': author.username if author else "Unknown",
+            'created_at': comment.created_at.isoformat() if comment.created_at else None,
+            'updated_at': comment.updated_at.isoformat() if hasattr(comment, 'updated_at') and comment.updated_at else None,
+            'is_approved': getattr(comment, 'is_approved', True),
+            'is_flagged': getattr(comment, 'is_flagged', False),
+            'vote_score': vote_score,
+            'upvotes': upvotes,
+            'downvotes': downvotes,
+            'total_votes': upvotes + downvotes,
+            'userVote': user_vote,
+            'likes_count': likes_count,
+            'liked_by_user': liked_by_user,
+            'replies_count': Comment.query.filter_by(parent_id=comment.id, is_approved=True).count() if hasattr(Comment, 'is_approved') else Comment.query.filter_by(parent_id=comment.id).count()
+        }
+    except Exception as e:
+        logger.error(f"Error serializing comment {comment.id}: {e}")
+        # Fallback serialization
+        author = User.query.get(comment.user_id)
+        return {
+            'id': comment.id,
+            'content': comment.content,
+            'post_id': comment.post_id,
+            'user_id': comment.user_id,
+            'parent_id': comment.parent_id,
+            'author': {
+                'id': author.id,
+                'username': author.username
+            } if author else {"id": None, "username": "Unknown"},
+            'username': author.username if author else "Unknown",
+            'created_at': comment.created_at.isoformat() if comment.created_at else None,
+            'is_approved': getattr(comment, 'is_approved', True),
+            'is_flagged': getattr(comment, 'is_flagged', False),
+            'vote_score': 0,
+            'likes_count': 0,
+            'liked_by_user': False
+        }
 
+@comment_bp.route("/posts/<int:post_id>/comments", methods=["GET"])
+def get_post_comments(post_id):
+    """Get comments for a specific post"""
+    try:
         # Get current user
         current_user_id = None
         current_user = None
@@ -44,164 +113,81 @@ def list_comments():
         except:
             pass
 
-        # Allow admins to get all comments without parameters
-        if current_user and current_user.is_admin and (all_comments or admin_mode or (not post_id and not user_id)):
-            # Admin can get all comments
-            comments = Comment.query.order_by(Comment.created_at.desc()).all()
-            comments_data = []
-            
-            for c in comments:
-                try:
-                    comment_data = c.to_dict(include_author=True) if hasattr(c, 'to_dict') else {
-                        "id": c.id,
-                        "content": c.content,
-                        "post_id": c.post_id,
-                        "user_id": c.user_id,
-                        "author": {
-                            "id": c.user_id,
-                            "username": c.user.username if c.user else "Unknown User"
-                        },
-                        "parent_id": c.parent_id,
-                        "created_at": c.created_at.isoformat() if c.created_at else datetime.now(timezone.utc).isoformat(),
-                        "updated_at": c.updated_at.isoformat() if hasattr(c, 'updated_at') and c.updated_at else None,
-                        "likes_count": getattr(c, 'likes_count', 0),
-                        "vote_score": getattr(c, 'vote_score', 0),
-                        "upvotes_count": getattr(c, 'upvotes_count', 0),
-                        "downvotes_count": getattr(c, 'downvotes_count', 0),
-                        "total_votes": getattr(c, 'total_votes', 0),
-                        "is_approved": getattr(c, 'is_approved', True),
-                        "is_flagged": getattr(c, 'is_flagged', False)
-                    }
-                    comments_data.append(comment_data)
-                except Exception as e:
-                    current_app.logger.warning(f"Error processing comment {c.id}: {e}")
-                    continue
-            
-            return jsonify(comments_data), 200
+        # Verify post exists
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
 
-        # Non-admins need post_id or user_id
-        if not post_id and not user_id:
-            return jsonify({"error": "post_id or user_id parameter is required"}), 400
-
-        # Build query for specific post or user
-        query = Comment.query
-        if post_id:
-            try:
-                post_id = int(post_id)
-                query = query.filter_by(post_id=post_id)
-            except ValueError:
-                return jsonify({"error": "Invalid post_id format"}), 400
-                
-        if user_id:
-            try:
-                user_id = int(user_id)
-                query = query.filter_by(user_id=user_id)
-            except ValueError:
-                return jsonify({"error": "Invalid user_id format"}), 400
-
-        # Filter by approval status (non-admins see only approved)
+        # Build query for comments
+        query = Comment.query.filter_by(post_id=post_id)
+        
+        # Filter by approval status unless user is admin or author
         if not (current_user and current_user.is_admin):
-            query = query.filter_by(is_approved=True)
-
+            query = query.filter(Comment.is_approved == True)
+        
         # Get comments ordered by creation date
         comments = query.order_by(Comment.created_at.asc()).all()
-
-        # Format comments data
-        comments_data = []
-        for c in comments:
-            # Get user's vote on this comment if logged in
-            user_vote = None
-            if current_user_id:
-                vote = Vote.query.filter_by(user_id=current_user_id, comment_id=c.id).first()
-                user_vote = vote.value if vote else None
-
-            # Get user's like status
-            user_liked = False
-            if current_user_id:
-                like = Like.query.filter_by(user_id=current_user_id, comment_id=c.id).first()
-                user_liked = like is not None
-
-            comment_data = {
-                "id": c.id,
-                "content": c.content,
-                "post_id": c.post_id,
-                "user_id": c.user_id,
-                "author": {
-                    "id": c.user_id,
-                    "username": c.user.username if c.user else "Unknown User"
-                },
-                "parent_id": c.parent_id,
-                "created_at": c.created_at.isoformat() if c.created_at else datetime.now(timezone.utc).isoformat(),
-                "updated_at": c.updated_at.isoformat() if hasattr(c, 'updated_at') and c.updated_at else None,
-                "likes_count": getattr(c, 'likes_count', 0),
-                "vote_score": getattr(c, 'vote_score', 0),
-                "upvotes_count": getattr(c, 'upvotes_count', 0),
-                "downvotes_count": getattr(c, 'downvotes_count', 0),
-                "total_votes": getattr(c, 'total_votes', 0),
-                "is_approved": getattr(c, 'is_approved', True),
-                "is_flagged": getattr(c, 'is_flagged', False),
-                "user_vote": user_vote,
-                "user_liked": user_liked
-            }
-            comments_data.append(comment_data)
-
+        
+        # Serialize comments
+        comments_data = [serialize_comment_with_stats(c, current_user_id) for c in comments]
+        
         return jsonify(comments_data), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error fetching comments: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to fetch comments: {str(e)}"}), 500
+        logger.error(f"Error fetching comments for post {post_id}: {e}")
+        return jsonify({"error": "Failed to fetch comments", "message": str(e)}), 500
 
-@comment_bp.route("/comments", methods=["POST"])
+@comment_bp.route("/posts/<int:post_id>/comments", methods=["POST"])
 @jwt_required()
 @block_check_required
-def create_comment():
-    """Create a new comment"""
+def create_post_comment(post_id):
+    """Create a new comment on a specific post"""
     try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Verify post exists
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
+
         data = request.get_json()
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        if not data:
+            return jsonify({"error": "No JSON body provided"}), 400
 
-        # Validate required fields
-        if not data or not data.get("content") or not data.get("post_id"):
-            return jsonify({"error": "Missing fields: content and post_id are required"}), 400
+        content = data.get("content", "").strip()
+        parent_id = data.get("parent_id")
 
-        # Validate content
-        content = data["content"].strip()
-        if len(content) < 1:
-            return jsonify({"error": "Comment content cannot be empty"}), 400
+        if not content:
+            return jsonify({"error": "Comment content is required"}), 400
 
         if len(content) > 1000:
             return jsonify({"error": "Comment content too long (max 1000 characters)"}), 400
 
-        # Validate post exists
-        try:
-            post_id = int(data["post_id"])
-            post = Post.query.get(post_id)
-            if not post:
-                return jsonify({"error": f"Post with ID {post_id} does not exist"}), 404
-        except ValueError:
-            return jsonify({"error": "Invalid post_id format"}), 400
-
         # Validate parent comment if provided
-        parent_id = data.get("parent_id")
         if parent_id:
             try:
                 parent_id = int(parent_id)
                 parent_comment = Comment.query.get(parent_id)
-                if not parent_comment:
-                    return jsonify({"error": f"Parent comment with ID {parent_id} does not exist"}), 404
+                if not parent_comment or parent_comment.post_id != post_id:
+                    return jsonify({"error": "Invalid parent comment"}), 400
             except ValueError:
                 return jsonify({"error": "Invalid parent_id format"}), 400
 
-        # Create comment - auto-approve for admins
+        # Comments require approval by default (except for admins)
+        is_approved = current_user.is_admin
+
+        # Create comment
         comment = Comment(
             content=content,
             post_id=post_id,
-            user_id=user_id,
+            user_id=current_user_id,
             parent_id=parent_id,
             created_at=datetime.now(timezone.utc),
-            is_approved=user.is_admin,  # Auto-approve admin comments
+            is_approved=is_approved,
             is_flagged=False
         )
 
@@ -211,68 +197,173 @@ def create_comment():
         db.session.add(comment)
         db.session.commit()
 
-        return jsonify({
-            "success": True,
-            "message": "Comment created successfully" + (" and approved" if user.is_admin else " - pending approval"),
-            "comment": {
-                "id": comment.id,
-                "content": comment.content,
-                "post_id": comment.post_id,
-                "user_id": comment.user_id,
-                "author": {
-                    "id": user.id,
-                    "username": user.username
-                },
-                "parent_id": comment.parent_id,
-                "created_at": comment.created_at.isoformat(),
-                "is_approved": comment.is_approved,
-                "is_flagged": comment.is_flagged,
-                "likes_count": 0,
-                "vote_score": 0,
-                "upvotes_count": 0,
-                "downvotes_count": 0,
-                "total_votes": 0
-            }
-        }), 201
+        # Serialize the new comment
+        comment_data = serialize_comment_with_stats(comment, current_user_id)
+        
+        if not is_approved:
+            comment_data['message'] = 'Comment posted successfully and is pending admin approval'
+        else:
+            comment_data['message'] = 'Comment posted and approved automatically'
+
+        return jsonify(comment_data), 201
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error creating comment: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": "Failed to create comment"}), 500
+        logger.error(f"Error creating comment: {e}")
+        return jsonify({"error": "Failed to create comment", "message": str(e)}), 500
+
+@comment_bp.route("/comments/<int:comment_id>", methods=["GET"])
+def get_comment(comment_id):
+    """Get a specific comment"""
+    try:
+        # Get current user
+        current_user_id = None
+        current_user = None
+        try:
+            verify_jwt_in_request(optional=True)
+            current_user_id = get_jwt_identity()
+            if current_user_id:
+                current_user = User.query.get(current_user_id)
+        except:
+            pass
+
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+
+        # Check if user can view this comment
+        can_view = (
+            getattr(comment, 'is_approved', True) or  # Comment is approved
+            (current_user and current_user.is_admin) or  # User is admin
+            (current_user_id == comment.user_id)  # User is the author
+        )
+
+        if not can_view:
+            return jsonify({"error": "Comment not found"}), 404
+
+        comment_data = serialize_comment_with_stats(comment, current_user_id)
+        return jsonify(comment_data), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to fetch comment", "message": str(e)}), 500
+
+@comment_bp.route("/comments/<int:comment_id>", methods=["PATCH"])
+@jwt_required()
+@block_check_required
+def update_comment(comment_id):
+    """Update a specific comment"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        comment = Comment.query.get(comment_id)
+        
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+        if comment.user_id != current_user_id and not current_user.is_admin:
+            return jsonify({"error": "Permission denied"}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON body provided"}), 400
+
+        # Regular users editing their comment requires re-approval
+        requires_reapproval = False
+
+        if 'content' in data:
+            content = data['content'].strip()
+            if not content: 
+                return jsonify({"error": "Content cannot be empty"}), 400
+            if len(content) > 1000:
+                return jsonify({"error": "Comment content too long (max 1000 characters)"}), 400
+            if comment.content != content:
+                comment.content = content
+                requires_reapproval = True
+
+        # Admin-only fields
+        if current_user.is_admin:
+            if 'is_approved' in data: 
+                comment.is_approved = bool(data['is_approved'])
+                requires_reapproval = False  # Admin is handling approval
+            if 'is_flagged' in data: 
+                comment.is_flagged = bool(data['is_flagged'])
+        else:
+            # Non-admin users need re-approval if they edit content
+            if requires_reapproval and getattr(comment, 'is_approved', True):
+                comment.is_approved = False
+
+        if hasattr(comment, 'updated_at'):
+            comment.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        comment_data = serialize_comment_with_stats(comment, current_user_id)
+        if requires_reapproval and not current_user.is_admin:
+            comment_data['message'] = 'Comment updated successfully and is pending admin approval'
+
+        return jsonify(comment_data), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to update comment", "message": str(e)}), 500
+
+@comment_bp.route("/comments/<int:comment_id>", methods=["DELETE"])
+@jwt_required()
+@block_check_required
+def delete_comment(comment_id):
+    """Delete a specific comment"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        comment = Comment.query.get(comment_id)
+        
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+        if comment.user_id != current_user_id and not current_user.is_admin:
+            return jsonify({"error": "Permission denied"}), 403
+
+        # Delete related data first
+        Like.query.filter_by(comment_id=comment_id).delete()
+        Vote.query.filter_by(comment_id=comment_id).delete()
+        
+        # Delete replies
+        Comment.query.filter_by(parent_id=comment_id).delete()
+        
+        db.session.delete(comment)
+        db.session.commit()
+        
+        return jsonify({"message": "Comment deleted successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to delete comment", "message": str(e)}), 500
 
 @comment_bp.route("/comments/<int:comment_id>/like", methods=["POST"])
 @jwt_required()
 @block_check_required
-def like_comment(comment_id):
-    """Like or unlike a comment"""
+def toggle_comment_like(comment_id):
+    """Toggle like on a comment"""
     try:
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
+        current_user_id = get_jwt_identity()
         comment = Comment.query.get(comment_id)
-
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
+        
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Check if user already liked this comment
-        existing_like = Like.query.filter_by(
-            user_id=user_id,
-            comment_id=comment_id
-        ).first()
-
-        if existing_like:
-            # Unlike the comment
-            db.session.delete(existing_like)
+        existing = Like.query.filter_by(comment_id=comment_id, user_id=current_user_id).first()
+        if existing:
+            db.session.delete(existing)
             message = "Comment unliked"
             liked = False
         else:
-            # Like the comment
             new_like = Like(
-                user_id=user_id,
                 comment_id=comment_id,
+                user_id=current_user_id,
                 created_at=datetime.now(timezone.utc)
             )
             db.session.add(new_like)
@@ -280,195 +371,154 @@ def like_comment(comment_id):
             liked = True
 
         db.session.commit()
-
-        # Get updated like count
+        
         likes_count = Like.query.filter_by(comment_id=comment_id).count()
-
         return jsonify({
-            "success": True,
             "message": message,
-            "liked": liked,
-            "likes_count": likes_count
+            "likes": likes_count,
+            "likes_count": likes_count,
+            "liked_by_user": liked
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error toggling comment like: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": "Failed to toggle like"}), 500
+        logger.error(f"Error toggling like on comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to toggle like", "message": str(e)}), 500
 
-@comment_bp.route("/comments/<int:id>", methods=["PATCH"])
-@jwt_required()
-@block_check_required
-def update_comment(id):
-    """Update a comment (only by owner or admin)"""
+# General comments endpoint for admin use
+@comment_bp.route("/comments", methods=["GET"])
+def list_comments():
+    """Get comments with various filters (mainly for admin use)"""
     try:
-        user_id = get_jwt_identity()
-        current_user = User.query.get(user_id)
-        comment = Comment.query.get(id)
+        # Get current user
+        current_user_id = None
+        current_user = None
+        try:
+            verify_jwt_in_request(optional=True)
+            current_user_id = get_jwt_identity()
+            if current_user_id:
+                current_user = User.query.get(current_user_id)
+        except:
+            pass
 
-        if not current_user:
-            return jsonify({"error": "User not found"}), 404
+        # Get query parameters
+        post_id = request.args.get("post_id", type=int)
+        user_id = request.args.get("user_id", type=int)
+        all_comments = request.args.get("all", "").lower() == "true"
+        admin_mode = request.args.get("admin", "").lower() == "true"
+        limit = min(request.args.get("limit", 100, type=int), 500)
 
-        if not comment:
-            return jsonify({"error": "Comment not found"}), 404
+        # Build query
+        query = Comment.query
 
-        # Check permissions
-        if comment.user_id != user_id and not current_user.is_admin:
-            return jsonify({"error": "You can only edit your own comment"}), 403
+        # Apply filters
+        if post_id:
+            query = query.filter_by(post_id=post_id)
+        if user_id:
+            query = query.filter_by(user_id=user_id)
 
-        data = request.get_json()
-        if not data or not data.get("content"):
-            return jsonify({"error": "Content is required"}), 400
+        # Filter by approval status unless admin
+        if not (current_user and current_user.is_admin and (all_comments or admin_mode)):
+            if hasattr(Comment, 'is_approved'):
+                query = query.filter(Comment.is_approved == True)
 
-        content = data["content"].strip()
-        if len(content) < 1:
-            return jsonify({"error": "Comment content cannot be empty"}), 400
-
-        if len(content) > 1000:
-            return jsonify({"error": "Comment content too long (max 1000 characters)"}), 400
-
-        comment.content = content
-        if hasattr(comment, 'updated_at'):
-            comment.updated_at = datetime.now(timezone.utc)
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": "Comment updated successfully",
-            "comment": {
-                "id": comment.id,
-                "content": comment.content,
-                "updated_at": comment.updated_at.isoformat() if hasattr(comment, 'updated_at') and comment.updated_at else None
-            }
-        }), 200
+        # Order and limit
+        comments = query.order_by(Comment.created_at.desc()).limit(limit).all()
+        
+        # Serialize comments
+        comments_data = [serialize_comment_with_stats(c, current_user_id) for c in comments]
+        
+        return jsonify(comments_data), 200
 
     except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error updating comment: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": "Failed to update comment"}), 500
+        logger.error(f"Error fetching comments: {e}")
+        return jsonify({"error": "Failed to fetch comments", "message": str(e)}), 500
 
-@comment_bp.route("/comments/<int:id>", methods=["DELETE"])
+# ADMIN ROUTES
+@comment_bp.route("/admin/comments/<int:comment_id>/approve", methods=["PATCH"])
 @jwt_required()
-@block_check_required
-def delete_comment(id):
-    """Delete a comment (only by owner or admin)"""
+def admin_approve_comment(comment_id):
+    """Admin: Approve or reject a comment"""
     try:
-        user_id = get_jwt_identity()
-        current_user = User.query.get(user_id)
-        comment = Comment.query.get(id)
-
-        if not current_user:
-            return jsonify({"error": "User not found"}), 404
-
-        if not comment:
-            return jsonify({"error": "Comment not found"}), 404
-
-        # Check permissions
-        if comment.user_id != user_id and not current_user.is_admin:
-            return jsonify({"error": "You can only delete your own comment"}), 403
-
-        # Store comment info for response
-        comment_info = {
-            "id": comment.id,
-            "content": comment.content,
-            "deleted_by": "owner" if comment.user_id == user_id else "admin"
-        }
-
-        # Delete related likes and votes first
-        Like.query.filter_by(comment_id=id).delete()
-        Vote.query.filter_by(comment_id=id).delete()
-
-        # Delete the comment
-        db.session.delete(comment)
-        db.session.commit()
-
-        return jsonify({
-            "success": True,
-            "message": f"Comment ID {id} deleted successfully",
-            "comment": comment_info
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting comment: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": "Failed to delete comment"}), 500
-
-@comment_bp.route("/comments/<int:id>/approve", methods=["PATCH"])
-@jwt_required()
-def approve_comment(id):
-    """Approve or disapprove a comment (admin only)"""
-    try:
-        user = User.query.get(get_jwt_identity())
-        if not user or not user.is_admin:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
             return jsonify({"error": "Admin access required"}), 403
 
-        comment = Comment.query.get_or_404(id)
-        
-        data = request.get_json()
-        if data and "is_approved" in data:
-            comment.is_approved = bool(data["is_approved"])
-        else:
-            comment.is_approved = not comment.is_approved
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
 
+        data = request.get_json() or {}
+        is_approved = bool(data.get('is_approved', True))
+        
+        comment.is_approved = is_approved
         if hasattr(comment, 'updated_at'):
             comment.updated_at = datetime.now(timezone.utc)
+        
         db.session.commit()
 
+        action = 'approved' if is_approved else 'rejected'
         return jsonify({
-            "success": True,
-            "message": f"Comment {'approved' if comment.is_approved else 'disapproved'} successfully",
-            "is_approved": comment.is_approved
+            "message": f"Comment {action} successfully",
+            "comment": serialize_comment_with_stats(comment, current_user_id)
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error approving comment: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": "Failed to update comment approval status"}), 500
+        logger.error(f"Error approving comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to update approval", "message": str(e)}), 500
 
-@comment_bp.route("/comments/<int:id>/flag", methods=["PATCH"])
+@comment_bp.route("/admin/comments/<int:comment_id>/flag", methods=["PATCH"])
 @jwt_required()
-def flag_comment(id):
-    """Flag or unflag a comment"""
+def admin_flag_comment(comment_id):
+    """Admin: Flag or unflag a comment"""
     try:
-        user = User.query.get(get_jwt_identity())
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        comment = Comment.query.get_or_404(id)
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
         
-        data = request.get_json()
-        if data and "is_flagged" in data:
-            comment.is_flagged = bool(data["is_flagged"])
-        else:
-            comment.is_flagged = not comment.is_flagged
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin access required"}), 403
 
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+
+        data = request.get_json() or {}
+        is_flagged = bool(data.get('is_flagged', True))
+
+        comment.is_flagged = is_flagged
         if hasattr(comment, 'updated_at'):
             comment.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
+        action = 'flagged' if is_flagged else 'unflagged'
         return jsonify({
-            "success": True,
-            "message": f"Comment {'flagged' if comment.is_flagged else 'unflagged'} successfully",
-            "is_flagged": comment.is_flagged
+            "message": f"Comment {action} successfully",
+            "comment": serialize_comment_with_stats(comment, current_user_id)
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error flagging comment: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": "Failed to update comment flag status"}), 500
+        logger.error(f"Error flagging comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to flag comment", "message": str(e)}), 500
 
+# Test endpoint
 @comment_bp.route("/comments/test", methods=["GET"])
 def test_comments():
     """Test endpoint to verify comments system is working"""
     try:
         comment_count = Comment.query.count()
-        approved_count = Comment.query.filter_by(is_approved=True).count()
-        flagged_count = Comment.query.filter_by(is_flagged=True).count()
+        
+        # Safe attribute checking
+        approved_count = 0
+        flagged_count = 0
+        
+        if hasattr(Comment, 'is_approved'):
+            approved_count = Comment.query.filter_by(is_approved=True).count()
+        if hasattr(Comment, 'is_flagged'):
+            flagged_count = Comment.query.filter_by(is_flagged=True).count()
         
         return jsonify({
             "success": True,
@@ -476,18 +526,24 @@ def test_comments():
             "total_comments": comment_count,
             "approved_comments": approved_count,
             "flagged_comments": flagged_count,
+            "features": {
+                "approval_system": hasattr(Comment, 'is_approved'),
+                "flagging_system": hasattr(Comment, 'is_flagged'),
+                "voting_system": True,
+                "like_system": True
+            },
             "endpoints": {
-                "get_comments": "GET /api/comments?post_id=X",
-                "create_comment": "POST /api/comments",
-                "like_comment": "POST /api/comments/<id>/like",
+                "get_post_comments": "GET /api/posts/<id>/comments",
+                "create_comment": "POST /api/posts/<id>/comments",
+                "get_comment": "GET /api/comments/<id>",
                 "update_comment": "PATCH /api/comments/<id>",
                 "delete_comment": "DELETE /api/comments/<id>",
-                "approve_comment": "PATCH /api/admin/comments/<id>/approve",
-                "flag_comment": "PATCH /api/admin/comments/<id>/flag"
+                "like_comment": "POST /api/comments/<id>/like",
+                "admin_approve": "PATCH /api/admin/comments/<id>/approve",
+                "admin_flag": "PATCH /api/admin/comments/<id>/flag"
             }
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"Error in test endpoint: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in test endpoint: {e}")
         return jsonify({"error": f"Test failed: {str(e)}"}), 500

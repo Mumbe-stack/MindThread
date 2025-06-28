@@ -465,8 +465,7 @@ This will permanently delete:
           <div className="space-y-1">
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
             <p className="text-lg text-gray-900">
-              {user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
-                weekday: 'long',
+              {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'

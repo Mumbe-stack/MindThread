@@ -24,7 +24,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# FIXED: Remove url_prefix since app.py now handles it
 vote_bp = Blueprint("votes", __name__)
 
 
@@ -32,7 +31,7 @@ vote_bp = Blueprint("votes", __name__)
 @jwt_required()
 @block_check_required 
 def vote_post():
-    """Vote on a post (upvote/downvote) - users can vote on any post including their own"""
+    """Vote on a post (upvote/downvote) - users can vote on any approved post"""
     try:
         data = request.get_json()
         user_id = get_jwt_identity()
@@ -54,8 +53,9 @@ def vote_post():
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is approved
-        if not post.is_approved:
+        # Check if post is approved (unless user is admin or post author)
+        current_user = User.query.get(user_id)
+        if not post.is_approved and not (current_user and current_user.is_admin) and post.user_id != user_id:
             return jsonify({"error": "Cannot vote on unapproved post"}), 403
 
         # Check if user already voted on this post
@@ -70,7 +70,7 @@ def vote_post():
             else:
                 # Different vote - update it
                 existing_vote.value = value 
-                existing_vote.created_at = datetime.utcnow()  # Update timestamp
+                existing_vote.created_at = datetime.utcnow()
                 msg = "Vote updated"
                 user_vote = value
         else:
@@ -110,7 +110,7 @@ def vote_post():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error voting on post: {e}")
-        return jsonify({"error": "Failed to record vote"}), 500
+        return jsonify({"error": "Failed to record vote", "message": str(e)}), 500
 
 
 @vote_bp.route("/votes/post/<int:post_id>/score", methods=["GET"])
@@ -162,7 +162,7 @@ def get_post_score(post_id):
 @jwt_required()
 @block_check_required  
 def vote_comment():
-    """Vote on a comment (upvote/downvote) - users can vote on any comment including their own"""
+    """Vote on a comment (upvote/downvote) - users can vote on any approved comment"""
     try:
         data = request.get_json()
         user_id = get_jwt_identity()
@@ -182,8 +182,9 @@ def vote_comment():
         if not comment:
             return jsonify({"error": f"Comment with ID {comment_id} does not exist"}), 404
 
-        # Check if comment is approved
-        if not comment.is_approved:
+        # Check if comment is approved (unless user is admin or comment author)
+        current_user = User.query.get(user_id)
+        if not comment.is_approved and not (current_user and current_user.is_admin) and comment.user_id != user_id:
             return jsonify({"error": "Cannot vote on unapproved comment"}), 403
        
         existing_vote = Vote.query.filter_by(user_id=user_id, comment_id=comment_id).first()
@@ -237,7 +238,7 @@ def vote_comment():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error voting on comment: {e}")
-        return jsonify({"error": "Failed to record vote"}), 500
+        return jsonify({"error": "Failed to record vote", "message": str(e)}), 500
 
 
 @vote_bp.route("/votes/comment/<int:comment_id>/score", methods=["GET"])
@@ -404,7 +405,7 @@ def delete_comment_vote(comment_id):
         return jsonify({"error": "Failed to delete vote"}), 500
 
 
-# ADMIN SUPERPOWER ROUTES
+# ADMIN ROUTES
 @vote_bp.route("/votes/admin/post/<int:post_id>/votes", methods=["GET"])
 @jwt_required()
 def admin_get_post_votes(post_id):
