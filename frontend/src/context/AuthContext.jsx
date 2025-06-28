@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }) => {
     if (!tokenToVerify) return false;
 
     try {
-      const response = await fetch(`${API_URL}/api/verify-token`, {
+      const response = await fetch(`${API_URL}/api/auth/verify-token`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${tokenToVerify}`,
@@ -113,13 +113,204 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login function - CORRECTED to use /api/login
+  // ===== MISSING FUNCTION - ADD THIS =====
+  // Get comments for a specific post
+  const getPostComments = async (postId) => {
+    try {
+      if (!postId) {
+        throw new Error('Post ID is required');
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add authorization header if token is available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_URL}/api/comments?post_id=${postId}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // No comments found, return empty array
+          return {
+            success: true,
+            comments: [],
+            pagination: null,
+          };
+        }
+        
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        comments: data.comments || data,
+        pagination: data.pagination || null,
+      };
+
+    } catch (error) {
+      console.error('Error fetching post comments:', error);
+      return {
+        success: false,
+        error: error.message,
+        comments: [],
+      };
+    }
+  };
+
+  // Create a new comment
+  const createComment = async (postId, content) => {
+    try {
+      if (!postId || !content || !token) {
+        throw new Error('Post ID, content, and authentication are required');
+      }
+
+      const response = await authenticatedRequest(`${API_URL}/api/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          post_id: postId,
+          content: content.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      toast.success('Comment added successfully!');
+      return {
+        success: true,
+        comment: data.comment || data,
+      };
+
+    } catch (error) {
+      console.error('Error creating comment:', error);
+      toast.error(error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  // Update an existing comment
+  const updateComment = async (commentId, content) => {
+    try {
+      if (!commentId || !content || !token) {
+        throw new Error('Comment ID, content, and authentication are required');
+      }
+
+      const response = await authenticatedRequest(`${API_URL}/api/comments/${commentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          content: content.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      toast.success('Comment updated successfully!');
+      return {
+        success: true,
+        comment: data.comment || data,
+      };
+
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      toast.error(error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  // Delete a comment
+  const deleteComment = async (commentId) => {
+    try {
+      if (!commentId || !token) {
+        throw new Error('Comment ID and authentication are required');
+      }
+
+      const response = await authenticatedRequest(`${API_URL}/api/comments/${commentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      toast.success('Comment deleted successfully!');
+      return {
+        success: true,
+      };
+
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast.error(error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  // Like or unlike a comment
+  const toggleCommentLike = async (commentId) => {
+    try {
+      if (!commentId || !token) {
+        throw new Error('Comment ID and authentication are required');
+      }
+
+      const response = await authenticatedRequest(`${API_URL}/api/comments/${commentId}/like`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        liked: data.liked,
+        likes_count: data.likes_count,
+      };
+
+    } catch (error) {
+      console.error('Error toggling comment like:', error);
+      toast.error(error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  // Login function
   const login = async (credentials) => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/api/login`, {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -163,13 +354,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register function - CORRECTED to use /api/register
+  // Register function
   const register = async (userData) => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/api/register`, {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -214,12 +405,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout function - CORRECTED to use /api/logout
+  // Logout function
   const logout = async (showMessage = true) => {
     try {
       if (token) {
         // Call logout endpoint to invalidate token on server
-        await fetch(`${API_URL}/api/logout`, {
+        await fetch(`${API_URL}/api/auth/logout`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -253,7 +444,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const response = await authenticatedRequest(`${API_URL}/api/change-password`, {
+      const response = await authenticatedRequest(`${API_URL}/api/auth/change-password`, {
         method: "POST",
         body: JSON.stringify(passwordData),
       });
@@ -286,7 +477,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/api/forgot-password`, {
+      const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -320,7 +511,7 @@ export const AuthProvider = ({ children }) => {
   // Refresh token function
   const refreshToken = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/refresh`, {
+      const response = await fetch(`${API_URL}/api/auth/refresh`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -356,7 +547,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      const response = await authenticatedRequest(`${API_URL}/api/me`, {
+      const response = await authenticatedRequest(`${API_URL}/api/auth/me`, {
         method: "PATCH",
         body: JSON.stringify(profileData),
       });
@@ -420,6 +611,13 @@ export const AuthProvider = ({ children }) => {
     // Token management
     verifyToken,
     refreshToken,
+    
+    // Comment functions - ADDED THESE
+    getPostComments,
+    createComment,
+    updateComment,
+    deleteComment,
+    toggleCommentLike,
     
     // Utility functions
     authenticatedRequest,
