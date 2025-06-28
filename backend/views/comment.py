@@ -482,8 +482,8 @@ def test_comments():
                 "like_comment": "POST /api/comments/<id>/like",
                 "update_comment": "PATCH /api/comments/<id>",
                 "delete_comment": "DELETE /api/comments/<id>",
-                "approve_comment": "PATCH /api/comments/<id>/approve",
-                "flag_comment": "PATCH /api/comments/<id>/flag"
+                "approve_comment": "PATCH /api/admin/comments/<id>/approve",
+                "flag_comment": "PATCH /api/admin/comments/<id>/flag"
             }
         }), 200
         

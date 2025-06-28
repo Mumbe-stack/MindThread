@@ -291,7 +291,7 @@ def toggle_like(post_id):
 
 # --- Admin routes ---
 
-@post_bp.route('/admin/posts/<int:post_id>/approve', methods=['PATCH'])
+@post_bp.route('/api/admin/posts/<int:post_id>/approve', methods=['PATCH'])
 @jwt_required()
 def approve_post(post_id):
     """Approve or reject a post (admin only)"""
@@ -321,7 +321,7 @@ def approve_post(post_id):
         logger.error(f"Error approving post {post_id}: {e}")
         return jsonify({'error':'Failed to update approval','message':str(e)}),500
 
-@post_bp.route('/admin/posts/<int:post_id>/flag', methods=['PATCH'])
+@post_bp.route('/api/admin/posts/<int:post_id>/flag', methods=['PATCH'])
 @jwt_required()
 def admin_flag_post(post_id):
     """Flag or unflag a post (admin only)"""
