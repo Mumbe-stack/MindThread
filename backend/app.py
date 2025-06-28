@@ -269,7 +269,7 @@ try:
     app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
     app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
     app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
-    app.register_blueprint(admin_bp, url_prefix="/api")     # admin_bp should define routes like @bp.route('/admin')
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")     # admin_bp should define routes like @bp.route('/admin')
     app.register_blueprint(home_bp)                         # home_bp for root routes
     logger.info("All blueprints registered successfully")
 except Exception as e:

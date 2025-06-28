@@ -53,21 +53,31 @@ const AdminDashboard = () => {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
+  // 🔧 FIXED: Enhanced error handling function
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
+    console.log(`Response status: ${response.status} for ${response.url}`);
+    
     if (!response.ok) {
       let errorText = errorMessage;
+      let errorDetails = {};
+      
       try {
         const errorData = await response.json();
         errorText = errorData.error || errorData.message || errorMessage;
-      } catch {
+        errorDetails = errorData;
+        console.error("API Error Details:", errorDetails);
+      } catch (parseError) {
+        console.error("Failed to parse error response:", parseError);
         if (response.status === 404) {
           errorText = `Endpoint not found: ${response.url}`;
         } else if (response.status === 403) {
           errorText = "Admin access required";
         } else if (response.status === 401) {
           errorText = "Authentication required";
+        } else if (response.status === 500) {
+          errorText = `Server error (${response.status}). Check server logs for details.`;
         } else {
-          errorText = `${errorMessage} (${response.status})`;
+          errorText = `${errorMessage} (HTTP ${response.status})`;
         }
       }
       throw new Error(errorText);
@@ -75,14 +85,26 @@ const AdminDashboard = () => {
 
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
+      const textResponse = await response.text();
+      console.warn("Non-JSON response:", textResponse);
       throw new Error("Server returned non-JSON response");
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log("API Response:", result);
+    return result;
   };
 
+  // 🔧 FIXED: Enhanced makeAuthenticatedRequest with better debugging
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
+      console.log(`Making request to: ${url}`);
+      console.log(`Request options:`, {
+        method: options.method || 'GET',
+        headers: options.headers,
+        body: options.body
+      });
+
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -92,11 +114,82 @@ const AdminDashboard = () => {
         },
         credentials: "include",
       });
+      
+      console.log(`Response received: ${response.status} ${response.statusText}`);
       return response;
     } catch (error) {
-      throw new Error("Network error. Please check your connection.");
+      console.error("Network error:", error);
+      throw new Error(`Network error: ${error.message}. Please check your connection.`);
     }
   };
+
+  // 🔧 FIXED: Add a debug function to test endpoints
+  const debugFlagEndpoints = async () => {
+    if (!token || !user?.is_admin) {
+      console.log("Not authenticated or not admin");
+      return;
+    }
+
+    try {
+      console.log("Testing admin debug endpoint...");
+      const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/debug/flag-test`);
+      const result = await handleApiResponse(response, "Debug test failed");
+      console.log("Debug test result:", result);
+      
+      // Test if we can reach flag endpoints
+      const endpoints = [
+        `${VITE_API_URL}/api/admin/posts/1/flag`,
+        `${VITE_API_URL}/api/admin/comments/1/flag`
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Testing endpoint: ${endpoint}`);
+          const testResponse = await fetch(endpoint, {
+            method: 'OPTIONS', // Use OPTIONS to test if endpoint exists
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            }
+          });
+          console.log(`${endpoint} - Status: ${testResponse.status}`);
+        } catch (error) {
+          console.error(`Error testing ${endpoint}:`, error);
+        }
+      }
+      
+    } catch (error) {
+      console.error("Debug test failed:", error);
+    }
+  };
+
+  // Updated content action buttons with better error handling
+  const renderContentActions = (item, type) => (
+    <div className="flex gap-2 ml-4">
+      <button
+        onClick={() => handleContentAction(type, item.id, "flag")}
+        className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition-colors"
+        disabled={loading}
+      >
+        {item.is_flagged ? "Unflag" : "Flag"}
+      </button>
+      {item.is_flagged && (
+        <button
+          onClick={() => handleContentAction(type, item.id, "approve")}
+          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
+          disabled={loading}
+        >
+          Approve
+        </button>
+      )}
+      <button
+        onClick={() => handleContentAction(type, item.id, "delete")}
+        className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
+        disabled={loading}
+      >
+        Delete
+      </button>
+    </div>
+  );
 
   useEffect(() => {
     if (!user?.is_admin) {
@@ -453,6 +546,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // 🔧 FIXED: Fixed handleContentAction function in AdminDashboard.jsx
   const handleContentAction = async (type, id, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -461,17 +555,24 @@ const AdminDashboard = () => {
       let method = "PATCH";
       let body = null;
 
+      // 🔧 FIXED: Updated endpoint paths and added better error handling
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
+          // 🔧 FIXED: Use correct endpoint path and send empty JSON body
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          body = JSON.stringify({}); // Send empty JSON object to ensure proper content-type
+          break;
+        case "unflag":
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          body = JSON.stringify({ is_flagged: false });
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
@@ -480,6 +581,13 @@ const AdminDashboard = () => {
           endpoint = `${VITE_API_URL}/api/${type}s/${id}`;
           method = "DELETE";
           break;
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+
+      console.log(`Making ${method} request to: ${endpoint}`);
+      if (body) {
+        console.log(`Request body: ${body}`);
       }
 
       const response = await makeAuthenticatedRequest(endpoint, {
@@ -487,15 +595,21 @@ const AdminDashboard = () => {
         body
       });
 
-      await handleApiResponse(response, `Failed to ${action} ${type}`);
+      const result = await handleApiResponse(response, `Failed to ${action} ${type}`);
+      console.log(`${action} ${type} response:`, result);
+      
       toast.success(`${type} ${action} successful`);
       
-      await fetchFlaggedContent();
-      await fetchAllContent();
-      await fetchOverviewData();
+      // Refresh all relevant data
+      await Promise.all([
+        fetchFlaggedContent(),
+        fetchAllContent(),
+        fetchOverviewData()
+      ]);
       
     } catch (err) {
-      toast.error(err.message);
+      console.error(`Error in handleContentAction:`, err);
+      toast.error(`Failed to ${action} ${type}: ${err.message}`);
     }
   };
 
@@ -598,6 +712,13 @@ const AdminDashboard = () => {
               className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               🔄 Refresh Data
+            </button>
+            <button
+              onClick={debugFlagEndpoints}
+              disabled={loading}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              🔧 Debug Endpoints
             </button>
           </div>
 
@@ -810,20 +931,7 @@ const AdminDashboard = () => {
                           By {post.author?.username || "Unknown"} • {new Date(post.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
-                        <button
-                          onClick={() => handleContentAction("post", post.id, "flag")}
-                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
-                        >
-                          Flag
-                        </button>
-                        <button
-                          onClick={() => handleContentAction("post", post.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {renderContentActions(post, "post")}
                     </div>
                   </div>
                 ))
@@ -854,20 +962,7 @@ const AdminDashboard = () => {
                           By {comment.author?.username || "Unknown"} • {new Date(comment.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
-                        <button
-                          onClick={() => handleContentAction("comment", comment.id, "flag")}
-                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
-                        >
-                          Flag
-                        </button>
-                        <button
-                          onClick={() => handleContentAction("comment", comment.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {renderContentActions(comment, "comment")}
                     </div>
                   </div>
                 ))
@@ -914,20 +1009,7 @@ const AdminDashboard = () => {
                           By {post.author?.username || "Unknown"} • Flagged on {new Date(post.flagged_at || post.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
-                        <button
-                          onClick={() => handleContentAction("post", post.id, "approve")}
-                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleContentAction("post", post.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {renderContentActions(post, "post")}
                     </div>
                   </div>
                 ))
@@ -956,20 +1038,7 @@ const AdminDashboard = () => {
                           By {comment.author?.username || "Unknown"} • Flagged on {new Date(comment.flagged_at || comment.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
-                        <button
-                          onClick={() => handleContentAction("comment", comment.id, "approve")}
-                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleContentAction("comment", comment.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {renderContentActions(comment, "comment")}
                     </div>
                   </div>
                 ))
