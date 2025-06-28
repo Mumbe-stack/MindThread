@@ -429,9 +429,9 @@ This will permanently delete:
                 second: '2-digit',
                 hour12: true,
                 timeZoneName: 'short'
-      })
-    : 'Recently joined'}
-</p>
+              })
+            : 'Recently joined'}
+          </p>
           </div>
           <div className="space-y-1">
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Account Type</label>

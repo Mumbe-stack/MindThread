@@ -22,7 +22,6 @@ except ImportError:
         wrapper.__name__ = f.__name__
         return wrapper
 
-# FIXED: Remove url_prefix since app.py handles it
 comment_bp = Blueprint('comments', __name__)
 
 @comment_bp.route("/comments", methods=["GET"])
@@ -45,7 +44,7 @@ def list_comments():
         except:
             pass
 
-        # ✅ FIXED: Allow admins to get all comments without parameters
+        # Allow admins to get all comments without parameters
         if current_user and current_user.is_admin and (all_comments or admin_mode or (not post_id and not user_id)):
             # Admin can get all comments
             comments = Comment.query.order_by(Comment.created_at.desc()).all()
@@ -80,7 +79,7 @@ def list_comments():
             
             return jsonify(comments_data), 200
 
-        # 🚫 Non-admins need post_id or user_id
+        # Non-admins need post_id or user_id
         if not post_id and not user_id:
             return jsonify({"error": "post_id or user_id parameter is required"}), 400
 
@@ -152,35 +151,6 @@ def list_comments():
         current_app.logger.error(f"Error fetching comments: {e}")
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch comments: {str(e)}"}), 500
-    
-    
-@comment_bp.route("/", methods=["GET"])
-@jwt_required()
-def get_comments():
-    identity = get_jwt_identity()
-    user = User.query.get(identity)
-
-    post_id = request.args.get("post_id", type=int)
-    user_id = request.args.get("user_id", type=int)
-
-    # ✅ Allow admins to get all comments
-    if user and user.is_admin and not post_id and not user_id:
-        comments = Comment.query.order_by(Comment.created_at.desc()).all()
-        return jsonify([c.to_dict() for c in comments]), 200
-
-    # 🚫 Block others from accessing without filters
-    if not post_id and not user_id:
-        return jsonify({"error": "post_id or user_id parameter is required"}), 400
-
-    query = Comment.query
-    if post_id:
-        query = query.filter_by(post_id=post_id)
-    if user_id:
-        query = query.filter_by(user_id=user_id)
-
-    comments = query.order_by(Comment.created_at.desc()).all()
-    return jsonify([c.to_dict() for c in comments]), 200
-
 
 @comment_bp.route("/comments", methods=["POST"])
 @jwt_required()
@@ -492,7 +462,6 @@ def flag_comment(id):
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Failed to update comment flag status"}), 500
 
-# Test endpoint
 @comment_bp.route("/comments/test", methods=["GET"])
 def test_comments():
     """Test endpoint to verify comments system is working"""
@@ -522,5 +491,3 @@ def test_comments():
         current_app.logger.error(f"Error in test endpoint: {e}")
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Test failed: {str(e)}"}), 500
-    
-    
