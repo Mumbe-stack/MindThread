@@ -1,378 +1,480 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from functools import wraps
+from models import db, User, Post, Comment, Vote, Like
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import func, or_
-from models import db, User, Post, Comment, Vote
-
-admin_bp = Blueprint("admin", __name__)
+from sqlalchemy import func, desc
+from functools import wraps
+import logging
 
 def admin_required(fn):
-    """Decorator to require admin privileges"""
+    """Admin decorator - ensures only admin users can access endpoints"""
     @wraps(fn)
-    @jwt_required()
     def wrapper(*args, **kwargs):
         try:
-            uid = get_jwt_identity()
-            if not uid:
-                return jsonify({"error": "Authentication required"}), 401
-
-            user = User.query.get(uid)
-            if not user:
-                return jsonify({"error": "User not found"}), 404
-            if not user.is_admin:
-                return jsonify({"error": "Admin access required"}), 403
-            if user.is_blocked:
-                return jsonify({"error": "Account is blocked"}), 403
-
+            user_id = get_jwt_identity()
+            user = User.query.get(user_id)
+            if not user or not user.is_admin:
+                return jsonify({"error": "Admin privileges required"}), 403
             return fn(*args, **kwargs)
         except Exception as e:
-            current_app.logger.error(f"Admin check error: {e}")
             return jsonify({"error": "Authorization failed"}), 500
     return wrapper
 
+def paginate_query(query, page=1, per_page=20, max_per_page=100):
+    """Simple pagination function"""
+    try:
+        page = max(1, page)
+        per_page = min(max(1, per_page), max_per_page)
+        
+        total = query.count()
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        
+        return {
+            "items": items,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": (total + per_page - 1) // per_page,
+                "has_next": (page * per_page) < total,
+                "has_prev": page > 1,
+                "next_page": page + 1 if (page * per_page) < total else None,
+                "prev_page": page - 1 if page > 1 else None
+            }
+        }
+    except Exception as e:
+        return {
+            "items": [],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": 0,
+                "pages": 0,
+                "has_next": False,
+                "has_prev": False,
+                "next_page": None,
+                "prev_page": None
+            }
+        }
+
+logger = logging.getLogger(__name__)
+
+# Create Blueprint
+admin_bp = Blueprint('admin', __name__)
+
 @admin_bp.route("/admin/stats", methods=["GET"])
+@jwt_required()
 @admin_required
-def admin_stats():
+def get_admin_stats():
     """Get comprehensive admin statistics"""
     try:
-        # Basic totals
-        total_users    = User.query.count()
-        total_posts    = Post.query.count()
-        total_comments = Comment.query.count()
-        total_votes    = Vote.query.count()
-
-        # Status counts
+        # Basic counts
+        total_users = User.query.count()
+        active_users = User.query.filter_by(is_active=True).count() if hasattr(User, 'is_active') else total_users
         blocked_users = User.query.filter_by(is_blocked=True).count()
-        admin_users   = User.query.filter_by(is_admin=True).count()
-
-        # Flagged/pending
-        flagged_posts    = Post.query.filter_by(is_flagged=True).count()
+        admin_users = User.query.filter_by(is_admin=True).count()
+        
+        total_posts = Post.query.count()
+        approved_posts = Post.query.filter_by(is_approved=True).count()
+        flagged_posts = Post.query.filter_by(is_flagged=True).count()
+        
+        total_comments = Comment.query.count()
+        approved_comments = Comment.query.filter_by(is_approved=True).count()
         flagged_comments = Comment.query.filter_by(is_flagged=True).count()
-        pending_posts    = Post.query.filter_by(is_approved=False).count()
-        pending_comments = Comment.query.filter_by(is_approved=False).count()
-
-        # Recent 7-day activity
-        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        recent_users    = User.query.filter(User.created_at >= week_ago).count()
-        recent_posts    = Post.query.filter(Post.created_at >= week_ago).count()
-        recent_comments = Comment.query.filter(Comment.created_at >= week_ago).count()
-
-        # Today’s activity
-        today = datetime.now(timezone.utc).date()
-        today_users    = User.query.filter(func.date(User.created_at) == today).count()
-        today_posts    = Post.query.filter(func.date(Post.created_at) == today).count()
-        today_comments = Comment.query.filter(func.date(Comment.created_at) == today).count()
-
+        
+        total_votes = Vote.query.count()
+        total_likes = Like.query.count()
+        
+        # Recent activity (last 30 days)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        recent_users = User.query.filter(User.created_at >= thirty_days_ago).count()
+        recent_posts = Post.query.filter(Post.created_at >= thirty_days_ago).count()
+        recent_comments = Comment.query.filter(Comment.created_at >= thirty_days_ago).count()
+        
         stats = {
             "users": total_users,
-            "posts": total_posts,
-            "comments": total_comments,
-            "votes": total_votes,
+            "active_users": active_users,
             "blocked_users": blocked_users,
             "admin_users": admin_users,
-            "flagged": flagged_posts + flagged_comments,
+            "posts": total_posts,
+            "approved_posts": approved_posts,
             "flagged_posts": flagged_posts,
+            "comments": total_comments,
+            "approved_comments": approved_comments,
             "flagged_comments": flagged_comments,
-            "pending_posts": pending_posts,
-            "pending_comments": pending_comments,
+            "flagged": flagged_posts + flagged_comments,
+            "total_votes": total_votes,
+            "total_likes": total_likes,
             "recent_activity": {
                 "users": recent_users,
                 "posts": recent_posts,
                 "comments": recent_comments
-            },
-            "today_activity": {
-                "users": today_users,
-                "posts": today_posts,
-                "comments": today_comments
             }
         }
-        current_app.logger.info(f"Admin stats: {stats}")
+        
         return jsonify(stats), 200
-
+        
     except Exception as e:
-        current_app.logger.error(f"Error in admin_stats: {e}")
-        return jsonify({"error": "Failed to fetch admin stats"}), 500
+        logger.error(f"Error fetching admin stats: {e}")
+        return jsonify({"error": "Failed to fetch statistics"}), 500
 
 @admin_bp.route("/admin/activity-trends", methods=["GET"])
+@jwt_required()
 @admin_required
 def get_activity_trends():
-    """Get 7-day activity trends"""
+    """Get activity trends for charts"""
     try:
-        end_date = datetime.now(timezone.utc).date()
-        start_date = end_date - timedelta(days=6)
+        # Get data for last 7 days
+        today = datetime.now(timezone.utc).date()
+        week_ago = today - timedelta(days=6)
+        
+        # Daily post counts
+        daily_posts = []
+        daily_users = []
         labels = []
-        posts, users, comments, votes = [], [], [], []
-
+        
         for i in range(7):
-            d = start_date + timedelta(days=i)
-            labels.append(d.strftime('%a'))
-            posts.append(Post.query.filter(func.date(Post.created_at)==d).count())
-            users.append(User.query.filter(func.date(User.created_at)==d).count())
-            comments.append(Comment.query.filter(func.date(Comment.created_at)==d).count())
-            votes.append(Vote.query.filter(func.date(Vote.created_at)==d).count())
-
-        data = {"labels": labels, "posts": posts, "users": users, "comments": comments, "votes": votes}
-        current_app.logger.info(f"Activity trends: {data}")
-        return jsonify(data), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error in get_activity_trends: {e}")
-        # fallback
+            day = week_ago + timedelta(days=i)
+            day_start = datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
+            day_end = datetime.combine(day, datetime.max.time()).replace(tzinfo=timezone.utc)
+            
+            posts_count = Post.query.filter(
+                Post.created_at >= day_start,
+                Post.created_at <= day_end
+            ).count()
+            
+            users_count = User.query.filter(
+                User.created_at >= day_start,
+                User.created_at <= day_end
+            ).count()
+            
+            daily_posts.append(posts_count)
+            daily_users.append(users_count)
+            labels.append(day.strftime('%a'))
+        
         return jsonify({
-            "labels": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
-            "posts":    [0]*7,
-            "users":    [0]*7,
-            "comments": [0]*7,
-            "votes":    [0]*7
+            "labels": labels,
+            "posts": daily_posts,
+            "users": daily_users
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching activity trends: {e}")
+        return jsonify({
+            "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            "posts": [0, 0, 0, 0, 0, 0, 0],
+            "users": [0, 0, 0, 0, 0, 0, 0]
         }), 200
 
-@admin_bp.route("/admin/users/search", methods=["GET"])
-@admin_required
-def search_users():
-    """Search users by username or email"""
-    q = request.args.get('q', '').strip()
-    if not q:
-        return jsonify({"error": "Search query is required"}), 400
-
-    limit = min(request.args.get('limit', 20, type=int), 50)
-    results = User.query.filter(
-        or_(User.username.ilike(f'%{q}%'), User.email.ilike(f'%{q}%'))
-    ).limit(limit).all()
-
-    users = []
-    for u in results:
-        d = u.to_dict()
-        d.update({
-            "posts_count": u.posts.count(),
-            "comments_count": u.comments.count()
-        })
-        users.append(d)
-
-    return jsonify({"users": users, "count": len(users)}), 200
-
 @admin_bp.route("/admin/flagged/posts", methods=["GET"])
+@jwt_required()
 @admin_required
 def get_flagged_posts():
-    """List flagged posts"""
-    flagged = Post.query.filter_by(is_flagged=True).order_by(Post.created_at.desc()).all()
-    data = []
-    for p in flagged:
-        d = p.to_dict(include_author=True)
-        d.update({
-            "flagged_at": (p.updated_at or p.created_at).isoformat(),
-            "comments_count": p.comments.count(),
-            "approved_comments": p.comments.filter_by(is_approved=True).count()
-        })
-        data.append(d)
-    return jsonify({"flagged_posts": data, "count": len(data)}), 200
+    """Get all flagged posts"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        
+        query = Post.query.filter_by(is_flagged=True).order_by(desc(Post.updated_at))
+        
+        result = paginate_query(query, page, per_page)
+        
+        posts_data = []
+        for post in result['items']:
+            author = User.query.get(post.user_id)
+            posts_data.append({
+                "id": post.id,
+                "title": post.title,
+                "content": post.content[:200] + "..." if len(post.content) > 200 else post.content,
+                "author": {
+                    "id": author.id,
+                    "username": author.username
+                } if author else {"id": None, "username": "Unknown"},
+                "created_at": post.created_at.isoformat() if post.created_at else None,
+                "updated_at": post.updated_at.isoformat() if post.updated_at else None,
+                "is_approved": post.is_approved,
+                "is_flagged": post.is_flagged
+            })
+        
+        return jsonify({
+            "posts": posts_data,
+            "pagination": result['pagination']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching flagged posts: {e}")
+        return jsonify({"error": "Failed to fetch flagged posts"}), 500
 
 @admin_bp.route("/admin/flagged/comments", methods=["GET"])
+@jwt_required()
 @admin_required
 def get_flagged_comments():
-    """List flagged comments"""
-    flagged = Comment.query.filter_by(is_flagged=True).order_by(Comment.created_at.desc()).all()
-    data = []
-    for c in flagged:
-        d = c.to_dict(include_author=True)
-        d.update({
-            "flagged_at": (c.updated_at or c.created_at).isoformat(),
-            "post_title": c.post.title if c.post else None,
-            "parent_id": c.parent_id
-        })
-        data.append(d)
-    return jsonify({"flagged_comments": data, "count": len(data)}), 200
-
-@admin_bp.route("/admin/users", methods=["GET"])
-@admin_required
-def get_all_users():
-    """Paginated list of users with stats"""
-    page     = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 20, type=int), 100)
-    search   = request.args.get('search', '').strip()
-
-    query = User.query
-    if search:
-        query = query.filter(or_(
-            User.username.ilike(f'%{search}%'),
-            User.email.ilike(f'%{search}%')
-        ))
-    pag = query.order_by(User.created_at.desc()).paginate(page, per_page, False)
-
-    users = []
-    for u in pag.items:
-        d = u.to_dict()
-        d.update({
-            "posts_count": u.posts.count(),
-            "comments_count": u.comments.count(),
-            "votes_count": u.votes.count(),
-            "flagged_posts": u.posts.filter_by(is_flagged=True).count(),
-            "flagged_comments": u.comments.filter_by(is_flagged=True).count()
-        })
-        users.append(d)
-
-    return jsonify({
-        "users": users,
-        "pagination": {
-            "page": pag.page,
-            "per_page": pag.per_page,
-            "total": pag.total,
-            "pages": pag.pages,
-            "has_prev": pag.has_prev,
-            "has_next": pag.has_next
-        }
-    }), 200
-
-@admin_bp.route("/admin/dashboard-summary", methods=["GET"])
-@admin_required
-def get_dashboard_summary():
-    """High-level dashboard overview"""
+    """Get all flagged comments"""
     try:
-        totals = {
-            "total_users":    User.query.count(),
-            "total_posts":    Post.query.count(),
-            "total_comments": Comment.query.count(),
-            "blocked_users":  User.query.filter_by(is_blocked=True).count()
-        }
-        pending = {
-            "posts":   Post.query.filter_by(is_approved=False).count(),
-            "comments":Comment.query.filter_by(is_approved=False).count()
-        }
-        flagged = {
-            "posts":   Post.query.filter_by(is_flagged=True).count(),
-            "comments":Comment.query.filter_by(is_flagged=True).count()
-        }
-        day_ago = datetime.now(timezone.utc) - timedelta(days=1)
-        recent = {
-            "users":    User.query.filter(User.created_at>=day_ago).count(),
-            "posts":    Post.query.filter(Post.created_at>=day_ago).count(),
-            "comments": Comment.query.filter(Comment.created_at>=day_ago).count()
-        }
-
-        # Top contributors
-        top_posts = db.session.query(
-            User.id, User.username, func.count(Post.id).label('count')
-        ).join(Post).group_by(User.id).order_by(func.count(Post.id).desc()).limit(5).all()
-
-        top_comments = db.session.query(
-            User.id, User.username, func.count(Comment.id).label('count')
-        ).join(Comment).group_by(User.id).order_by(func.count(Comment.id).desc()).limit(5).all()
-
-        summary = {
-            "overview": totals,
-            "pending_approval": {**pending, "total": sum(pending.values())},
-            "flagged_content": {**flagged, "total": sum(flagged.values())},
-            "recent_activity": recent,
-            "top_users": {
-                "posters":    [{"id": u.id, "username": u.username, "count": u.count} for u in top_posts],
-                "commenters":[{"id": u.id, "username": u.username, "count": u.count} for u in top_comments]
-            }
-        }
-        return jsonify(summary), 200
-
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        
+        query = Comment.query.filter_by(is_flagged=True).order_by(desc(Comment.updated_at))
+        
+        result = paginate_query(query, page, per_page)
+        
+        comments_data = []
+        for comment in result['items']:
+            author = User.query.get(comment.user_id)
+            post = Post.query.get(comment.post_id)
+            comments_data.append({
+                "id": comment.id,
+                "content": comment.content,
+                "post_id": comment.post_id,
+                "post_title": post.title if post else "Unknown Post",
+                "author": {
+                    "id": author.id,
+                    "username": author.username
+                } if author else {"id": None, "username": "Unknown"},
+                "created_at": comment.created_at.isoformat() if comment.created_at else None,
+                "updated_at": comment.updated_at.isoformat() if comment.updated_at else None,
+                "is_approved": comment.is_approved,
+                "is_flagged": comment.is_flagged
+            })
+        
+        return jsonify({
+            "comments": comments_data,
+            "pagination": result['pagination']
+        }), 200
+        
     except Exception as e:
-        current_app.logger.error(f"Error in get_dashboard_summary: {e}")
-        return jsonify({"error": "Failed to fetch dashboard summary"}), 500
+        logger.error(f"Error fetching flagged comments: {e}")
+        return jsonify({"error": "Failed to fetch flagged comments"}), 500
 
-@admin_bp.route("/admin/users/<int:user_id>/block", methods=["PATCH"])
+@admin_bp.route("/admin/users/search", methods=["GET"])
+@jwt_required()
 @admin_required
-def toggle_block_user(user_id):
-    """Block/unblock a user"""
-    user = User.query.get_or_404(user_id)
-    me = int(get_jwt_identity())
-    if user.id == me:
-        return jsonify({"error": "Cannot block yourself"}), 400
+def search_users_admin():
+    """Search users for admin"""
+    try:
+        query = request.args.get('q', '').strip()
+        if not query:
+            return jsonify({"error": "Search query required"}), 400
+        
+        users = User.query.filter(
+            db.or_(
+                User.username.ilike(f'%{query}%'),
+                User.email.ilike(f'%{query}%')
+            )
+        ).limit(50).all()
+        
+        users_data = []
+        for user in users:
+            users_data.append({
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_admin": user.is_admin,
+                "is_blocked": user.is_blocked,
+                "is_active": getattr(user, 'is_active', True),
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "post_count": user.posts.count() if hasattr(user, 'posts') else 0,
+                "comment_count": user.comments.count() if hasattr(user, 'comments') else 0
+            })
+        
+        return jsonify({
+            "users": users_data,
+            "query": query,
+            "count": len(users_data)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error searching users: {e}")
+        return jsonify({"error": "Failed to search users"}), 500
 
-    user.is_blocked = not user.is_blocked
-    user.updated_at = datetime.now(timezone.utc)
-    db.session.commit()
-
-    return jsonify({
-        "success": True,
-        "message": f"User {'blocked' if user.is_blocked else 'unblocked'}",
-        "user": user.to_dict()
-    }), 200
-
-@admin_bp.route("/admin/users/<int:user_id>", methods=["DELETE"])
+@admin_bp.route("/admin/content/pending", methods=["GET"])
+@jwt_required()
 @admin_required
-def delete_user(user_id):
-    """Delete a user"""
-    user = User.query.get_or_404(user_id)
-    me = int(get_jwt_identity())
-    if user.id == me:
-        return jsonify({"error": "Cannot delete yourself"}), 400
+def get_pending_content():
+    """Get content pending approval"""
+    try:
+        pending_posts = Post.query.filter_by(is_approved=False).order_by(desc(Post.created_at)).limit(10).all()
+        pending_comments = Comment.query.filter_by(is_approved=False).order_by(desc(Comment.created_at)).limit(10).all()
+        
+        posts_data = []
+        for post in pending_posts:
+            author = User.query.get(post.user_id)
+            posts_data.append({
+                "id": post.id,
+                "title": post.title,
+                "content": post.content[:150] + "..." if len(post.content) > 150 else post.content,
+                "author": {
+                    "id": author.id,
+                    "username": author.username
+                } if author else {"id": None, "username": "Unknown"},
+                "created_at": post.created_at.isoformat() if post.created_at else None
+            })
+        
+        comments_data = []
+        for comment in pending_comments:
+            author = User.query.get(comment.user_id)
+            post = Post.query.get(comment.post_id)
+            comments_data.append({
+                "id": comment.id,
+                "content": comment.content,
+                "post_title": post.title if post else "Unknown Post",
+                "author": {
+                    "id": author.id,
+                    "username": author.username
+                } if author else {"id": None, "username": "Unknown"},
+                "created_at": comment.created_at.isoformat() if comment.created_at else None
+            })
+        
+        return jsonify({
+            "pending_posts": posts_data,
+            "pending_comments": comments_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching pending content: {e}")
+        return jsonify({"error": "Failed to fetch pending content"}), 500
 
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({
-        "success": True,
-        "message": f"User '{user.username}' deleted"
-    }), 200
-
-@admin_bp.route("/admin/users/<int:user_id>/admin", methods=["PATCH"])
+@admin_bp.route("/admin/reports", methods=["GET"])
+@jwt_required()
 @admin_required
-def toggle_admin_status(user_id):
-    """Promote/demote a user"""
-    user = User.query.get_or_404(user_id)
-    me = int(get_jwt_identity())
-    if user.id == me:
-        return jsonify({"error": "Cannot modify your own admin status"}), 400
+def generate_reports():
+    """Generate various admin reports"""
+    try:
+        report_type = request.args.get('type', 'summary')
+        
+        if report_type == 'user_activity':
+            # User activity report
+            thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+            
+            active_users = db.session.query(
+                User.id,
+                User.username,
+                func.count(Post.id).label('post_count'),
+                func.count(Comment.id).label('comment_count')
+            ).outerjoin(Post).outerjoin(Comment).filter(
+                db.or_(
+                    Post.created_at >= thirty_days_ago,
+                    Comment.created_at >= thirty_days_ago
+                )
+            ).group_by(User.id).limit(20).all()
+            
+            report_data = [
+                {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "posts": user.post_count,
+                    "comments": user.comment_count
+                }
+                for user in active_users
+            ]
+            
+        elif report_type == 'content_stats':
+            # Content statistics report
+            report_data = {
+                "posts_by_status": {
+                    "approved": Post.query.filter_by(is_approved=True).count(),
+                    "pending": Post.query.filter_by(is_approved=False).count(),
+                    "flagged": Post.query.filter_by(is_flagged=True).count()
+                },
+                "comments_by_status": {
+                    "approved": Comment.query.filter_by(is_approved=True).count(),
+                    "pending": Comment.query.filter_by(is_approved=False).count(),
+                    "flagged": Comment.query.filter_by(is_flagged=True).count()
+                }
+            }
+            
+        else:
+            # Default summary report
+            report_data = {
+                "total_users": User.query.count(),
+                "total_posts": Post.query.count(),
+                "total_comments": Comment.query.count(),
+                "flagged_content": Post.query.filter_by(is_flagged=True).count() + Comment.query.filter_by(is_flagged=True).count()
+            }
+        
+        return jsonify({
+            "report_type": report_type,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error generating reports: {e}")
+        return jsonify({"error": "Failed to generate report"}), 500
 
-    user.is_admin = not user.is_admin
-    user.updated_at = datetime.now(timezone.utc)
-    db.session.commit()
-
-    return jsonify({
-        "success": True,
-        "message": f"User {'promoted' if user.is_admin else 'demoted'}",
-        "user": user.to_dict()
-    }), 200
-
-@admin_bp.route("/admin/bulk-actions/approve-posts", methods=["POST"])
+# Bulk actions
+@admin_bp.route("/admin/bulk/approve", methods=["POST"])
+@jwt_required()
 @admin_required
-def bulk_approve_posts():
-    """Bulk approve/disapprove posts"""
-    data = request.get_json() or {}
-    ids     = data.get('post_ids', [])
-    approve = bool(data.get('approve', True))
-    if not ids:
-        return jsonify({"error": "No post IDs provided"}), 400
+def bulk_approve_content():
+    """Bulk approve posts or comments"""
+    try:
+        data = request.get_json()
+        content_type = data.get('type')  # 'posts' or 'comments'
+        ids = data.get('ids', [])
+        
+        if not content_type or not ids:
+            return jsonify({"error": "Content type and IDs required"}), 400
+        
+        updated_count = 0
+        
+        if content_type == 'posts':
+            Post.query.filter(Post.id.in_(ids)).update(
+                {"is_approved": True, "updated_at": datetime.now(timezone.utc)},
+                synchronize_session=False
+            )
+            updated_count = len(ids)
+        elif content_type == 'comments':
+            Comment.query.filter(Comment.id.in_(ids)).update(
+                {"is_approved": True, "updated_at": datetime.now(timezone.utc)},
+                synchronize_session=False
+            )
+            updated_count = len(ids)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Approved {updated_count} {content_type}",
+            "updated_count": updated_count
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error in bulk approve: {e}")
+        return jsonify({"error": "Failed to bulk approve content"}), 500
 
-    updated = Post.query.filter(Post.id.in_(ids)).update({
-        Post.is_approved: approve,
-        Post.updated_at:   datetime.now(timezone.utc)
-    }, synchronize_session=False)
-    db.session.commit()
-    return jsonify({
-        "success": True,
-        "message": f"{updated} posts {'approved' if approve else 'rejected'}"
-    }), 200
-
-@admin_bp.route("/admin/bulk-actions/approve-comments", methods=["POST"])
+@admin_bp.route("/admin/bulk/delete", methods=["POST"])
+@jwt_required()
 @admin_required
-def bulk_approve_comments():
-    """Bulk approve/disapprove comments"""
-    data = request.get_json() or {}
-    ids     = data.get('comment_ids', [])
-    approve = bool(data.get('approve', True))
-    if not ids:
-        return jsonify({"error": "No comment IDs provided"}), 400
-
-    updated = Comment.query.filter(Comment.id.in_(ids)).update({
-        Comment.is_approved: approve,
-        Comment.updated_at:   datetime.now(timezone.utc)
-    }, synchronize_session=False)
-    db.session.commit()
-    return jsonify({
-        "success": True,
-        "message": f"{updated} comments {'approved' if approve else 'rejected'}"
-    }), 200
-
-@admin_bp.route("/admin/health", methods=["GET"])
-@admin_required
-def admin_health_check():
-    """Admin API health check"""
-    return jsonify({
-        "status":    "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }), 200
+def bulk_delete_content():
+    """Bulk delete posts or comments"""
+    try:
+        data = request.get_json()
+        content_type = data.get('type')
+        ids = data.get('ids', [])
+        
+        if not content_type or not ids:
+            return jsonify({"error": "Content type and IDs required"}), 400
+        
+        deleted_count = 0
+        
+        if content_type == 'posts':
+            deleted_count = Post.query.filter(Post.id.in_(ids)).count()
+            Post.query.filter(Post.id.in_(ids)).delete(synchronize_session=False)
+        elif content_type == 'comments':
+            deleted_count = Comment.query.filter(Comment.id.in_(ids)).count()
+            Comment.query.filter(Comment.id.in_(ids)).delete(synchronize_session=False)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Deleted {deleted_count} {content_type}",
+            "deleted_count": deleted_count
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error in bulk delete: {e}")
+        return jsonify({"error": "Failed to bulk delete content"}), 500

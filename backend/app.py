@@ -24,9 +24,9 @@ CORS(
                 "https://mindthread-1.onrender.com",              
                 "https://mindthreadbloggingapp.netlify.app",      
                 "http://localhost:5173",
-                "http://localhost:3000",  # Added for React dev server
-                "http://127.0.0.1:5173",  # Added for local development
-                "http://127.0.0.1:3000"   # Added for local development
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000"
             ],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": [
@@ -59,7 +59,7 @@ app.config["JWT_SECRET_KEY"] = os.environ.get(
     "JWT_SECRET_KEY", 
     "jwt_secre542cc4f32fc0a619979df2b56083fb21c97ea4c9e0e2b7d25779734357a1810486ef0c480c8fb9da1990c602dbf1438b9b6f3fa72716b13baf28612496d8fcd8t_key"
 )
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)  # Reduced for better security
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 app.config["JWT_BLACKLIST_ENABLED"] = True
@@ -259,17 +259,23 @@ def service_unavailable(error):
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# CORRECTED: Register Blueprints with proper URL prefixes to match frontend expectations
+# Register Blueprints with proper URL prefixes - CORRECTED
 try:
-    # Frontend expects: /api/posts, /api/comments, etc.
-    # So we register blueprints with /api prefix and let each blueprint define its routes
-    app.register_blueprint(post_bp, url_prefix="/api")      # post_bp should define routes like @bp.route('/posts')
-    app.register_blueprint(comment_bp, url_prefix="/api")   # comment_bp should define routes like @bp.route('/comments')
-    app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
-    app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
-    app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
-    app.register_blueprint(admin_bp, url_prefix="/api")     # admin_bp should define routes like @bp.route('/admin')
-    app.register_blueprint(home_bp)                         # home_bp for root routes
+    # Core API routes (posts, comments, users, votes)
+    app.register_blueprint(post_bp, url_prefix="/api")
+    app.register_blueprint(comment_bp, url_prefix="/api")
+    app.register_blueprint(user_bp, url_prefix="/api")
+    app.register_blueprint(vote_bp, url_prefix="/api")
+    
+    # Authentication routes with /auth prefix - THIS IS THE KEY CHANGE
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    
+    # Admin routes
+    app.register_blueprint(admin_bp, url_prefix="/api")
+    
+    # Home routes (no prefix)
+    app.register_blueprint(home_bp)
+    
     logger.info("All blueprints registered successfully")
 except Exception as e:
     logger.error(f"Error registering blueprints: {e}")
@@ -279,7 +285,6 @@ except Exception as e:
 def health_check():
     """Health check endpoint"""
     try:
-        # Test database connection
         db.session.execute('SELECT 1')
         db_status = "healthy"
     except Exception as e:
@@ -290,8 +295,7 @@ def health_check():
         "status": "healthy" if db_status == "healthy" else "degraded",
         "database": db_status,
         "version": "1.0.0",
-        "environment": os.environ.get("FLASK_ENV", "production"),
-        "timestamp": os.times().elapsed
+        "environment": os.environ.get("FLASK_ENV", "production")
     }), 200 if db_status == "healthy" else 503
 
 # API Info Endpoint
@@ -311,7 +315,14 @@ def api_info():
             "admin": "/api/admin",
             "health": "/api/health"
         },
-        "documentation": "https://mindthread-1.onrender.com/api/docs"
+        "features": [
+            "User authentication & authorization",
+            "Post creation, editing & voting", 
+            "Comment system with nested replies",
+            "Admin dashboard & content moderation",
+            "Like & vote tracking",
+            "Mobile-responsive design"
+        ]
     }), 200
 
 def create_upload_dirs():
@@ -332,10 +343,8 @@ def create_upload_dirs():
 
 def validate_environment():
     """Validate required environment variables"""
-    required_vars = []
     warnings = []
     
-    # Check for production environment variables
     if not os.environ.get("JWT_SECRET_KEY"):
         warnings.append("JWT_SECRET_KEY not set - using default (not recommended for production)")
     
@@ -345,7 +354,7 @@ def validate_environment():
     for warning in warnings:
         logger.warning(warning)
     
-    return len(required_vars) == 0
+    return True
 
 # Application Context Setup
 with app.app_context():
@@ -361,35 +370,39 @@ with app.app_context():
         create_upload_dirs()
         logger.info("✅ Upload directories created successfully")
         
-        # Log registered routes for debugging
+        # Log registered routes for verification
         logger.info("✅ API Routes Registration:")
-        relevant_routes = []
+        api_routes = []
         for rule in app.url_map.iter_rules():
             if '/api/' in rule.rule:
                 methods = ', '.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
-                relevant_routes.append(f"   {methods:<20} {rule.rule}")
+                api_routes.append(f"   {methods:<20} {rule.rule}")
         
-        for route in sorted(relevant_routes):
+        for route in sorted(api_routes):
             logger.info(route)
         
-        # Check critical routes that frontend expects
-        logger.info("🔍 Critical Routes Check:")
+        # Check critical routes - CORRECTED to match new auth prefix
         critical_routes = [
-            '/api/login',           # CORRECTED: Actual working auth routes
-            '/api/register',        # CORRECTED: Actual working auth routes
             '/api/posts',
-            '/api/posts/<',         # For dynamic routes like /api/posts/<id>
+            '/api/posts/<int:post_id>',
+            '/api/posts/<int:post_id>/like',
             '/api/comments',
-            '/api/users',
-            '/api/votes/post',
+            '/api/votes/post/<int:post_id>',
             '/api/admin/stats',
-            '/api/health'
+            '/api/users',
+            '/api/auth/login',      # Now using /auth prefix
+            '/api/auth/register',   # Now using /auth prefix
+            '/api/auth/logout',     # Now using /auth prefix
+            '/api/auth/me',         # Now using /auth prefix
+            '/api/auth/verify-token' # Now using /auth prefix
         ]
         
+        logger.info("🔍 Critical Routes Check:")
         all_routes = [rule.rule for rule in app.url_map.iter_rules()]
         
         for route in critical_routes:
-            found = any(route in r for r in all_routes)
+            # Check if route pattern exists
+            found = any(route.replace('<int:post_id>', '<post_id>').replace('<int:', '<').replace('>', '') in r.replace('<int:', '<').replace('>', '') for r in all_routes)
             status = '✅ Found' if found else '❌ Missing'
             logger.info(f"   {status}: {route}")
         
@@ -397,40 +410,44 @@ with app.app_context():
         
     except Exception as e:
         logger.error(f"❌ Application initialization error: {e}")
-        # Don't exit in production, log error and continue
         if os.environ.get("FLASK_ENV") == "development":
             raise
 
-# Add request logging for debugging
+# Request/Response Middleware
 @app.before_request
-def log_request_info():
-    """Log request information for debugging"""
-    if app.debug or os.environ.get("FLASK_ENV") == "development":
+def before_request():
+    """Process request before handling"""
+    # Only log in development mode
+    if os.environ.get("FLASK_ENV") == "development":
         logger.debug(f"Request: {request.method} {request.url}")
-        if request.is_json:
-            logger.debug(f"JSON Data: {request.get_json()}")
 
 @app.after_request
 def after_request(response):
-    """Add security headers and log response"""
+    """Add security headers and process response"""
     # Security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     
-    # Log response for debugging
-    if app.debug or os.environ.get("FLASK_ENV") == "development":
-        logger.debug(f"Response: {response.status_code}")
+    # CORS headers for like count consistency
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
     
     return response
 
+# Production-ready run configuration
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     debug_mode = os.environ.get("FLASK_ENV") == "development"
     
-    logger.info(f"🚀 Starting MindThread API on port {port}")
-    logger.info(f"🔧 Debug mode: {debug_mode}")
+    logger.info(f"🚀 Starting MindThread API")
     logger.info(f"🌐 Environment: {os.environ.get('FLASK_ENV', 'production')}")
+    logger.info(f"🔧 Debug mode: {debug_mode}")
+    logger.info(f"📡 Port: {port}")
+    logger.info(f"🎯 Features: Posts, Comments, Votes, Likes, Admin Dashboard")
+    logger.info(f"🔐 Auth endpoints will be at: /api/auth/*")
     
     app.run(
         host="0.0.0.0", 

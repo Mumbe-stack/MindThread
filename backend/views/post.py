@@ -24,7 +24,7 @@ def serialize_comment(comment):
         'author': {
             'id': author.id,
             'username': author.username
-        } if author else None,
+        } if author else {"id": None, "username": "Unknown"},
         'created_at': comment.created_at.isoformat() if comment.created_at else None,
         'updated_at': comment.updated_at.isoformat() if comment.updated_at else None,
         'is_approved': comment.is_approved,
@@ -38,7 +38,7 @@ def serialize_comment(comment):
     }
 
 def serialize_post(post, current_user_id=None, include_comments=False):
-    """Serialize a post object to dict"""
+    """Serialize a post object to dict with FIXED like count consistency"""
     # build basic vote & like metrics
     upvotes = Vote.query.filter_by(post_id=post.id, value=1).count()
     downvotes = Vote.query.filter_by(post_id=post.id, value=-1).count()
@@ -77,7 +77,7 @@ def serialize_post(post, current_user_id=None, include_comments=False):
         'author': {
             'id': author.id,
             'username': author.username
-        } if author else None,
+        } if author else {"id": None, "username": "Unknown"},
         'created_at': post.created_at.isoformat() if post.created_at else None,
         'updated_at': post.updated_at.isoformat() if post.updated_at else None,
         'is_approved': post.is_approved,
@@ -86,8 +86,9 @@ def serialize_post(post, current_user_id=None, include_comments=False):
         'downvotes': downvotes,
         'vote_score': vote_score,
         'total_votes': upvotes + downvotes,
+        # FIXED: Ensure both field names for likes are consistent
         'likes_count': likes_count,
-        'likes': likes_count,
+        'likes': likes_count,  # For backward compatibility
         'liked_by_user': liked_by_user,
         'user_vote': user_vote,
         'comments_count': comments_count
@@ -297,7 +298,7 @@ def delete_post(post_id):
 @post_bp.route('/posts/<int:post_id>/like', methods=['POST'])
 @jwt_required()
 def toggle_like(post_id):
-    """Like or unlike a post"""
+    """FIXED: Like or unlike a post with consistent response format"""
     try:
         user_id = get_jwt_identity()
         post = Post.query.get(post_id)
@@ -308,6 +309,7 @@ def toggle_like(post_id):
         if existing:
             db.session.delete(existing)
             action = 'unliked'
+            liked_by_user = False
         else:
             like = Like(
                 post_id=post_id,
@@ -316,13 +318,19 @@ def toggle_like(post_id):
             )
             db.session.add(like)
             action = 'liked'
+            liked_by_user = True
 
         db.session.commit()
-        count = Like.query.filter_by(post_id=post_id).count()
+        
+        # Get updated like count
+        likes_count = Like.query.filter_by(post_id=post_id).count()
+        
         return jsonify({
             'message': f'Post {action}',
-            'likes_count': count,
-            'liked_by_user': action == 'liked'
+            'likes_count': likes_count,
+            'likes': likes_count,  # FIXED: Include both field names
+            'liked_by_user': liked_by_user,
+            'action': action
         }), 200
 
     except Exception as e:
