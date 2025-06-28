@@ -417,22 +417,26 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "block":
+          endpoint = `${VITE_API_URL}/api/admin/users/${userId}/block`;
+          body = JSON.stringify({ is_blocked: true });
+          break;
         case "unblock":
-          endpoint = `${VITE_API_URL}/api/users/${userId}/block`;
+          endpoint = `${VITE_API_URL}/api/admin/users/${userId}/block`;
+          body = JSON.stringify({ is_blocked: false });
           break;
         case "delete":
           if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
             return;
           }
-          endpoint = `${VITE_API_URL}/api/users/${userId}`;
+          endpoint = `${VITE_API_URL}/api/admin/users/${userId}`;
           method = "DELETE";
           break;
         case "make_admin":
-          endpoint = `${VITE_API_URL}/api/users/${userId}`;
+          endpoint = `${VITE_API_URL}/api/admin/users/${userId}`;
           body = JSON.stringify({ is_admin: true });
           break;
         case "remove_admin":
-          endpoint = `${VITE_API_URL}/api/users/${userId}`;
+          endpoint = `${VITE_API_URL}/api/admin/users/${userId}`;
           body = JSON.stringify({ is_admin: false });
           break;
       }
@@ -463,21 +467,26 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          body = JSON.stringify({ is_flagged: true });
+          break;
+        case "unflag":
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          body = JSON.stringify({ is_flagged: false });
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
             return;
           }
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}`;
+          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}`;
           method = "DELETE";
           break;
       }
@@ -812,10 +821,14 @@ const AdminDashboard = () => {
                       </div>
                       <div className="flex gap-2 ml-4">
                         <button
-                          onClick={() => handleContentAction("post", post.id, "flag")}
-                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                          onClick={() => handleContentAction("post", post.id, post.is_flagged ? "unflag" : "flag")}
+                          className={`px-3 py-1 text-xs rounded hover:bg-yellow-200 ${
+                            post.is_flagged 
+                              ? "bg-red-100 text-red-800" 
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
                         >
-                          Flag
+                          {post.is_flagged ? "Unflag" : "Flag"}
                         </button>
                         <button
                           onClick={() => handleContentAction("post", post.id, "delete")}
@@ -856,10 +869,14 @@ const AdminDashboard = () => {
                       </div>
                       <div className="flex gap-2 ml-4">
                         <button
-                          onClick={() => handleContentAction("comment", comment.id, "flag")}
-                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                          onClick={() => handleContentAction("comment", comment.id, comment.is_flagged ? "unflag" : "flag")}
+                          className={`px-3 py-1 text-xs rounded hover:bg-yellow-200 ${
+                            comment.is_flagged 
+                              ? "bg-red-100 text-red-800" 
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
                         >
-                          Flag
+                          {comment.is_flagged ? "Unflag" : "Flag"}
                         </button>
                         <button
                           onClick={() => handleContentAction("comment", comment.id, "delete")}
