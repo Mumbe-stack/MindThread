@@ -53,31 +53,21 @@ const AdminDashboard = () => {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
-  // 🔧 FIXED: Enhanced error handling function
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
-    console.log(`Response status: ${response.status} for ${response.url}`);
-    
     if (!response.ok) {
       let errorText = errorMessage;
-      let errorDetails = {};
-      
       try {
         const errorData = await response.json();
         errorText = errorData.error || errorData.message || errorMessage;
-        errorDetails = errorData;
-        console.error("API Error Details:", errorDetails);
-      } catch (parseError) {
-        console.error("Failed to parse error response:", parseError);
+      } catch {
         if (response.status === 404) {
           errorText = `Endpoint not found: ${response.url}`;
         } else if (response.status === 403) {
           errorText = "Admin access required";
         } else if (response.status === 401) {
           errorText = "Authentication required";
-        } else if (response.status === 500) {
-          errorText = `Server error (${response.status}). Check server logs for details.`;
         } else {
-          errorText = `${errorMessage} (HTTP ${response.status})`;
+          errorText = `${errorMessage} (${response.status})`;
         }
       }
       throw new Error(errorText);
@@ -85,26 +75,14 @@ const AdminDashboard = () => {
 
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-      const textResponse = await response.text();
-      console.warn("Non-JSON response:", textResponse);
       throw new Error("Server returned non-JSON response");
     }
 
-    const result = await response.json();
-    console.log("API Response:", result);
-    return result;
+    return response.json();
   };
 
-  // 🔧 FIXED: Enhanced makeAuthenticatedRequest with better debugging
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
-      console.log(`Making request to: ${url}`);
-      console.log(`Request options:`, {
-        method: options.method || 'GET',
-        headers: options.headers,
-        body: options.body
-      });
-
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -114,43 +92,11 @@ const AdminDashboard = () => {
         },
         credentials: "include",
       });
-      
-      console.log(`Response received: ${response.status} ${response.statusText}`);
       return response;
     } catch (error) {
-      console.error("Network error:", error);
-      throw new Error(`Network error: ${error.message}. Please check your connection.`);
+      throw new Error("Network error. Please check your connection.");
     }
   };
-
-  // Updated content action buttons with better error handling
-  const renderContentActions = (item, type) => (
-    <div className="flex gap-2 ml-4">
-      <button
-        onClick={() => handleContentAction(type, item.id, "flag")}
-        className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition-colors"
-        disabled={loading}
-      >
-        {item.is_flagged ? "Unflag" : "Flag"}
-      </button>
-      {item.is_flagged && (
-        <button
-          onClick={() => handleContentAction(type, item.id, "approve")}
-          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
-          disabled={loading}
-        >
-          Approve
-        </button>
-      )}
-      <button
-        onClick={() => handleContentAction(type, item.id, "delete")}
-        className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
-        disabled={loading}
-      >
-        Delete
-      </button>
-    </div>
-  );
 
   useEffect(() => {
     if (!user?.is_admin) {
@@ -327,24 +273,29 @@ const AdminDashboard = () => {
     try {
       let postsData = [];
       try {
-        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
-        const data = await handleApiResponse(postsRes, "Failed to fetch posts");
-        postsData = Array.isArray(data) ? data : (data.posts || []);
+        const adminPostsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/posts`);
+        if (adminPostsRes.ok) {
+          const data = await handleApiResponse(adminPostsRes, "Failed to fetch admin posts");
+          postsData = Array.isArray(data) ? data : (data.posts || []);
+        } else {
+          const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
+          const data = await handleApiResponse(postsRes, "Failed to fetch posts");
+          postsData = Array.isArray(data) ? data : (data.posts || []);
+        }
       } catch (err) {
         toast.error(`Failed to load posts: ${err.message}`);
       }
 
       let commentsData = [];
       try {
-        // Try different comment endpoints without admin prefix first
-        const commentsEndpoints = [
-          `${VITE_API_URL}/api/comments/all`,
-          `${VITE_API_URL}/api/comments?all=true`,
-          `${VITE_API_URL}/api/comments?limit=100`
+        const adminCommentsEndpoints = [
+          `${VITE_API_URL}/api/admin/comments`,
+          `${VITE_API_URL}/api/admin/all-comments`,
+          `${VITE_API_URL}/api/comments/all`
         ];
 
         let commentsFound = false;
-        for (const endpoint of commentsEndpoints) {
+        for (const endpoint of adminCommentsEndpoints) {
           try {
             const res = await makeAuthenticatedRequest(endpoint);
             if (res.ok) {
@@ -380,6 +331,27 @@ const AdminDashboard = () => {
           commentsData = allComments;
         }
 
+        if (!commentsFound && commentsData.length === 0) {
+          const queryEndpoints = [
+            `${VITE_API_URL}/api/comments?all=true`,
+            `${VITE_API_URL}/api/comments?admin=true`,
+            `${VITE_API_URL}/api/comments?limit=100`
+          ];
+
+          for (const endpoint of queryEndpoints) {
+            try {
+              const res = await makeAuthenticatedRequest(endpoint);
+              if (res.ok) {
+                const data = await handleApiResponse(res, "Failed to fetch comments");
+                commentsData = Array.isArray(data) ? data : (data.comments || []);
+                break;
+              }
+            } catch (err) {
+              continue;
+            }
+          }
+        }
+
       } catch (err) {
         toast.error(`Failed to load comments: ${err.message}`);
       }
@@ -405,27 +377,24 @@ const AdminDashboard = () => {
       let flaggedPostsData = [];
       let flaggedCommentsData = [];
 
-      // Try to fetch flagged content using standard endpoints
       try {
-        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts?flagged=true`);
+        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
         if (postsRes.ok) {
           const data = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
           flaggedPostsData = Array.isArray(data) ? data : (data.posts || []);
         }
       } catch (err) {
-        // Endpoint not available, try alternative
-        console.log("Flagged posts endpoint not available");
+        // Endpoint not available
       }
 
       try {
-        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/comments?flagged=true`);
+        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/comments`);
         if (commentsRes.ok) {
           const data = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
           flaggedCommentsData = Array.isArray(data) ? data : (data.comments || []);
         }
       } catch (err) {
         // Endpoint not available
-        console.log("Flagged comments endpoint not available");
       }
 
       setFlaggedPosts(flaggedPostsData);
@@ -484,7 +453,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // 🔧 FIXED: Fixed handleContentAction function - reverted to original endpoints
   const handleContentAction = async (type, id, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -493,7 +461,6 @@ const AdminDashboard = () => {
       let method = "PATCH";
       let body = null;
 
-      // Using original endpoint structure
       switch (action) {
         case "approve":
           endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
@@ -505,11 +472,6 @@ const AdminDashboard = () => {
           break;
         case "flag":
           endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
-          body = JSON.stringify({}); // Send empty JSON object to ensure proper content-type
-          break;
-        case "unflag":
-          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
-          body = JSON.stringify({ is_flagged: false });
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
@@ -518,13 +480,6 @@ const AdminDashboard = () => {
           endpoint = `${VITE_API_URL}/api/${type}s/${id}`;
           method = "DELETE";
           break;
-        default:
-          throw new Error(`Unknown action: ${action}`);
-      }
-
-      console.log(`Making ${method} request to: ${endpoint}`);
-      if (body) {
-        console.log(`Request body: ${body}`);
       }
 
       const response = await makeAuthenticatedRequest(endpoint, {
@@ -532,21 +487,15 @@ const AdminDashboard = () => {
         body
       });
 
-      const result = await handleApiResponse(response, `Failed to ${action} ${type}`);
-      console.log(`${action} ${type} response:`, result);
-      
+      await handleApiResponse(response, `Failed to ${action} ${type}`);
       toast.success(`${type} ${action} successful`);
       
-      // Refresh all relevant data
-      await Promise.all([
-        fetchFlaggedContent(),
-        fetchAllContent(),
-        fetchOverviewData()
-      ]);
+      await fetchFlaggedContent();
+      await fetchAllContent();
+      await fetchOverviewData();
       
     } catch (err) {
-      console.error(`Error in handleContentAction:`, err);
-      toast.error(`Failed to ${action} ${type}: ${err.message}`);
+      toast.error(err.message);
     }
   };
 
@@ -861,7 +810,20 @@ const AdminDashboard = () => {
                           By {post.author?.username || "Unknown"} • {new Date(post.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      {renderContentActions(post, "post")}
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "flag")}
+                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        >
+                          Flag
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -892,7 +854,20 @@ const AdminDashboard = () => {
                           By {comment.author?.username || "Unknown"} • {new Date(comment.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      {renderContentActions(comment, "comment")}
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "flag")}
+                          className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        >
+                          Flag
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -939,7 +914,20 @@ const AdminDashboard = () => {
                           By {post.author?.username || "Unknown"} • Flagged on {new Date(post.flagged_at || post.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      {renderContentActions(post, "post")}
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "approve")}
+                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("post", post.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -968,7 +956,20 @@ const AdminDashboard = () => {
                           By {comment.author?.username || "Unknown"} • Flagged on {new Date(comment.flagged_at || comment.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      {renderContentActions(comment, "comment")}
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "approve")}
+                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleContentAction("comment", comment.id, "delete")}
+                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

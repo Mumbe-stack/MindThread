@@ -4,7 +4,6 @@ from functools import wraps
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, and_, or_
 from models import db, User, Post, Comment, Vote
-import traceback
 
 # FIXED: Remove url_prefix since app.py handles it
 admin_bp = Blueprint("admin", __name__)
@@ -551,6 +550,94 @@ def get_all_comments_simple():
         current_app.logger.error(f"Error fetching all comments: {e}")
         return jsonify({"error": "Failed to fetch comments"}), 500
 
+@admin_bp.route("/admin/dashboard-summary", methods=["GET"])
+@admin_required
+def get_dashboard_summary():
+    """Get a complete dashboard summary for the admin panel"""
+    try:
+        # Get basic stats
+        total_users = User.query.count()
+        total_posts = Post.query.count()
+        total_comments = Comment.query.count()
+        blocked_users = User.query.filter_by(is_blocked=True).count()
+        
+        # Get pending/flagged counts for immediate attention
+        pending_posts = 0
+        pending_comments = 0
+        flagged_posts = 0
+        flagged_comments = 0
+        
+        try:
+            if hasattr(Post, 'is_approved'):
+                pending_posts = Post.query.filter_by(is_approved=False).count()
+            if hasattr(Comment, 'is_approved'):
+                pending_comments = Comment.query.filter_by(is_approved=False).count()
+            if hasattr(Post, 'is_flagged'):
+                flagged_posts = Post.query.filter_by(is_flagged=True).count()
+            if hasattr(Comment, 'is_flagged'):
+                flagged_comments = Comment.query.filter_by(is_flagged=True).count()
+        except Exception as e:
+            current_app.logger.warning(f"Error fetching pending/flagged counts: {e}")
+        
+        # Get recent activity (last 24 hours)
+        day_ago = datetime.now(timezone.utc) - timedelta(days=1)
+        recent_users = User.query.filter(User.created_at >= day_ago).count()
+        recent_posts = Post.query.filter(Post.created_at >= day_ago).count()
+        recent_comments = Comment.query.filter(Comment.created_at >= day_ago).count()
+        
+        # Get top users by activity (with error handling)
+        top_posters = []
+        top_commenters = []
+        
+        try:
+            top_posters = db.session.query(
+                User.id, User.username, func.count(Post.id).label('post_count')
+            ).join(Post).group_by(User.id, User.username).order_by(
+                func.count(Post.id).desc()
+            ).limit(5).all()
+            
+            top_commenters = db.session.query(
+                User.id, User.username, func.count(Comment.id).label('comment_count')
+            ).join(Comment).group_by(User.id, User.username).order_by(
+                func.count(Comment.id).desc()
+            ).limit(5).all()
+        except Exception as e:
+            current_app.logger.warning(f"Error fetching top users: {e}")
+        
+        summary = {
+            "overview": {
+                "total_users": total_users,
+                "total_posts": total_posts,
+                "total_comments": total_comments,
+                "blocked_users": blocked_users
+            },
+            "pending_approval": {
+                "posts": pending_posts,
+                "comments": pending_comments,
+                "total": pending_posts + pending_comments
+            },
+            "flagged_content": {
+                "posts": flagged_posts,
+                "comments": flagged_comments,
+                "total": flagged_posts + flagged_comments
+            },
+            "recent_activity": {
+                "users": recent_users,
+                "posts": recent_posts,
+                "comments": recent_comments
+            },
+            "top_users": {
+                "posters": [{"id": u.id, "username": u.username, "post_count": u.post_count} for u in top_posters],
+                "commenters": [{"id": u.id, "username": u.username, "comment_count": u.comment_count} for u in top_commenters]
+            }
+        }
+        
+        return jsonify(summary), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching dashboard summary: {e}")
+        return jsonify({"error": "Failed to fetch dashboard summary"}), 500
+
 # User management endpoints
 @admin_bp.route("/admin/users/<int:user_id>/block", methods=["PATCH"])
 @admin_required
@@ -647,7 +734,7 @@ def toggle_admin_status(user_id):
         current_app.logger.error(f"Error toggling admin status: {e}")
         return jsonify({"error": "Failed to update admin status"}), 500
 
-# 🔧 FIXED: Content management endpoints with CORRECT routes and parameters
+# 🔧 FIXED: Content management endpoints with proper error handling
 @admin_bp.route("/admin/posts/<int:post_id>/approve", methods=["PATCH"])
 @admin_required
 def approve_post(post_id):
@@ -685,95 +772,43 @@ def approve_post(post_id):
         current_app.logger.error(f"Error approving post: {e}")
         return jsonify({"error": f"Failed to update post approval status: {str(e)}"}), 500
 
-# 🔧 FIXED: Correct route path for post flagging
-@admin_bp.route("/admin/posts/<int:post_id>/flag", methods=["PATCH"])
+@admin_bp.route('/posts/<int:post_id>/flag', methods=['PATCH'])
+@jwt_required()
 @admin_required
 def flag_post(post_id):
-    """Flag or unflag a post - FIXED VERSION"""
-    current_app.logger.info(f"=== FLAG POST REQUEST START ===")
-    current_app.logger.info(f"Post ID: {post_id}")
-    current_app.logger.info(f"Request method: {request.method}")
-    current_app.logger.info(f"Request URL: {request.url}")
-    current_app.logger.info(f"User ID: {get_jwt_identity()}")
-    
+    """Flag or unflag a post"""
     try:
-        # Get the post
-        post = Post.query.get(post_id)
-        if not post:
-            current_app.logger.error(f"Post {post_id} not found")
-            return jsonify({"error": f"Post {post_id} not found"}), 404
-        
-        current_app.logger.info(f"Found post: {post.title[:50]}...")
+        post = Post.query.get_or_404(post_id)
         
         # Check if model has is_flagged attribute
         if not hasattr(Post, 'is_flagged'):
-            current_app.logger.error("Post model missing is_flagged attribute")
-            # Try to add it dynamically (temporary fix)
-            try:
-                setattr(post, 'is_flagged', False)
-                current_app.logger.info("Added is_flagged attribute temporarily")
-            except:
-                return jsonify({"error": "Post flagging not supported"}), 400
+            current_app.logger.warning("Post model missing is_flagged attribute")
+            return jsonify({"error": "Post flagging not supported - model missing is_flagged field"}), 400
         
-        # Get current status
-        current_flagged = getattr(post, 'is_flagged', False)
-        current_app.logger.info(f"Current flagged status: {current_flagged}")
-        
-        # Handle request data
-        request_data = None
-        try:
-            request_data = request.get_json() or {}
-            current_app.logger.info(f"Request JSON: {request_data}")
-        except Exception as json_error:
-            current_app.logger.warning(f"JSON parse error: {json_error}")
-            request_data = {}
-        
-        # Determine new flag status
-        if "is_flagged" in request_data:
-            new_flagged = bool(request_data["is_flagged"])
-            current_app.logger.info(f"Setting flag from request: {new_flagged}")
+        data = request.get_json() or {}
+        if "is_flagged" in data:
+            post.is_flagged = bool(data["is_flagged"])
         else:
-            new_flagged = not current_flagged
-            current_app.logger.info(f"Toggling flag: {current_flagged} -> {new_flagged}")
-        
-        # Update the post
-        post.is_flagged = new_flagged
-        
-        # Update timestamp if available
+            current_value = getattr(post, 'is_flagged', False)
+            post.is_flagged = not current_value
+
         if hasattr(post, 'updated_at'):
             post.updated_at = datetime.now(timezone.utc)
-            current_app.logger.info("Updated timestamp")
-        
-        # Save to database
         db.session.commit()
-        current_app.logger.info(f"Successfully committed changes to database")
-        
-        action = "flagged" if new_flagged else "unflagged"
-        response_data = {
+
+        action = "flagged" if post.is_flagged else "unflagged"
+        current_app.logger.info(f"Post {post.id} {action} by admin")
+
+        return jsonify({
             "success": True,
             "message": f"Post {action} successfully",
-            "is_flagged": new_flagged,
-            "post_id": post_id,
-            "post_title": post.title
-        }
-        
-        current_app.logger.info(f"=== FLAG POST SUCCESS ===")
-        current_app.logger.info(f"Response: {response_data}")
-        
-        return jsonify(response_data), 200
+            "is_flagged": post.is_flagged
+        }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"=== FLAG POST ERROR ===")
-        current_app.logger.error(f"Error flagging post {post_id}: {str(e)}")
-        current_app.logger.error(f"Exception type: {type(e).__name__}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        return jsonify({
-            "error": f"Failed to flag post: {str(e)}",
-            "post_id": post_id,
-            "exception_type": type(e).__name__
-        }), 500
+        current_app.logger.error(f"Error flagging post: {e}")
+        return jsonify({"error": f"Failed to update post flag status: {str(e)}"}), 500
 
 @admin_bp.route("/admin/comments/<int:comment_id>/approve", methods=["PATCH"])
 @admin_required
@@ -812,115 +847,130 @@ def approve_comment_admin(comment_id):
         current_app.logger.error(f"Error approving comment: {e}")
         return jsonify({"error": f"Failed to update comment approval status: {str(e)}"}), 500
 
-# 🔧 FIXED: Correct route path and parameter name for comment flagging
-@admin_bp.route("/admin/comments/<int:comment_id>/flag", methods=["PATCH"])
+@admin_bp.route('/comments/<int:post_id>/flag', methods=['PATCH'])
+@jwt_required
 @admin_required
 def flag_comment_admin(comment_id):
-    """Flag or unflag a comment - FIXED VERSION"""
-    current_app.logger.info(f"=== FLAG COMMENT REQUEST START ===")
-    current_app.logger.info(f"Comment ID: {comment_id}")
-    current_app.logger.info(f"Request method: {request.method}")
-    current_app.logger.info(f"Request URL: {request.url}")
-    current_app.logger.info(f"User ID: {get_jwt_identity()}")
-    
+    """Flag or unflag a comment (admin endpoint)"""
     try:
-        # Get the comment
-        comment = Comment.query.get(comment_id)
-        if not comment:
-            current_app.logger.error(f"Comment {comment_id} not found")
-            return jsonify({"error": f"Comment {comment_id} not found"}), 404
-        
-        current_app.logger.info(f"Found comment: {comment.content[:50]}...")
+        comment = Comment.query.get_or_404(comment_id)
         
         # Check if model has is_flagged attribute
         if not hasattr(Comment, 'is_flagged'):
-            current_app.logger.error("Comment model missing is_flagged attribute")
-            # Try to add it dynamically (temporary fix)
-            try:
-                setattr(comment, 'is_flagged', False)
-                current_app.logger.info("Added is_flagged attribute temporarily")
-            except:
-                return jsonify({"error": "Comment flagging not supported"}), 400
+            current_app.logger.warning("Comment model missing is_flagged attribute")
+            return jsonify({"error": "Comment flagging not supported - model missing is_flagged field"}), 400
         
-        # Get current status
-        current_flagged = getattr(comment, 'is_flagged', False)
-        current_app.logger.info(f"Current flagged status: {current_flagged}")
-        
-        # Handle request data
-        request_data = None
-        try:
-            request_data = request.get_json() or {}
-            current_app.logger.info(f"Request JSON: {request_data}")
-        except Exception as json_error:
-            current_app.logger.warning(f"JSON parse error: {json_error}")
-            request_data = {}
-        
-        # Determine new flag status
-        if "is_flagged" in request_data:
-            new_flagged = bool(request_data["is_flagged"])
-            current_app.logger.info(f"Setting flag from request: {new_flagged}")
+        data = request.get_json() or {}
+        if "is_flagged" in data:
+            comment.is_flagged = bool(data["is_flagged"])
         else:
-            new_flagged = not current_flagged
-            current_app.logger.info(f"Toggling flag: {current_flagged} -> {new_flagged}")
-        
-        # Update the comment
-        comment.is_flagged = new_flagged
-        
-        # Update timestamp if available
+            current_value = getattr(comment, 'is_flagged', False)
+            comment.is_flagged = not current_value
+
         if hasattr(comment, 'updated_at'):
             comment.updated_at = datetime.now(timezone.utc)
-            current_app.logger.info("Updated timestamp")
-        
-        # Save to database
         db.session.commit()
-        current_app.logger.info(f"Successfully committed changes to database")
-        
-        action = "flagged" if new_flagged else "unflagged"
-        response_data = {
+
+        action = "flagged" if comment.is_flagged else "unflagged"
+        current_app.logger.info(f"Comment {comment.id} {action} by admin")
+
+        return jsonify({
             "success": True,
             "message": f"Comment {action} successfully",
-            "is_flagged": new_flagged,
-            "comment_id": comment_id,
-            "comment_content": comment.content[:100]
-        }
-        
-        current_app.logger.info(f"=== FLAG COMMENT SUCCESS ===")
-        current_app.logger.info(f"Response: {response_data}")
-        
-        return jsonify(response_data), 200
+            "is_flagged": comment.is_flagged
+        }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"=== FLAG COMMENT ERROR ===")
-        current_app.logger.error(f"Error flagging comment {comment_id}: {str(e)}")
-        current_app.logger.error(f"Exception type: {type(e).__name__}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+        current_app.logger.error(f"Error flagging comment: {e}")
+        return jsonify({"error": f"Failed to update comment flag status: {str(e)}"}), 500
+
+# Bulk action endpoints
+@admin_bp.route("/admin/bulk-actions/approve-posts", methods=["POST"])
+@admin_required
+def bulk_approve_posts():
+    """Bulk approve/disapprove multiple posts"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        post_ids = data.get('post_ids', [])
+        approve = data.get('approve', True)
+        
+        if not post_ids:
+            return jsonify({"error": "No post IDs provided"}), 400
+        
+        if not hasattr(Post, 'is_approved'):
+            return jsonify({"error": "Post approval not supported"}), 400
+        
+        # Update posts
+        updated_count = Post.query.filter(Post.id.in_(post_ids)).update(
+            {
+                Post.is_approved: approve,
+                Post.updated_at: datetime.now(timezone.utc) if hasattr(Post, 'updated_at') else Post.created_at
+            },
+            synchronize_session=False
+        )
+        
+        db.session.commit()
+        
+        action = "approved" if approve else "disapproved"
+        current_app.logger.info(f"Bulk {action} {updated_count} posts")
         
         return jsonify({
-            "error": f"Failed to flag comment: {str(e)}",
-            "comment_id": comment_id,
-            "exception_type": type(e).__name__
-        }), 500
-
-# Debug endpoints for testing
-@admin_bp.route("/admin/test-flag", methods=["GET", "POST", "PATCH"])
-@admin_required
-def test_flag_endpoint():
-    """Test endpoint to debug flagging issues"""
-    try:
-        return jsonify({
-            "message": "Flag endpoint is reachable",
-            "method": request.method,
-            "url": request.url,
-            "headers": dict(request.headers),
-            "json_data": request.get_json(),
-            "user_id": get_jwt_identity()
+            "success": True,
+            "message": f"{updated_count} posts {action} successfully",
+            "updated_count": updated_count
         }), 200
+        
     except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error in bulk approve posts: {e}")
+        return jsonify({"error": "Failed to bulk approve posts"}), 500
+
+@admin_bp.route("/admin/bulk-actions/approve-comments", methods=["POST"])
+@admin_required
+def bulk_approve_comments():
+    """Bulk approve/disapprove multiple comments"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        comment_ids = data.get('comment_ids', [])
+        approve = data.get('approve', True)
+        
+        if not comment_ids:
+            return jsonify({"error": "No comment IDs provided"}), 400
+        
+        if not hasattr(Comment, 'is_approved'):
+            return jsonify({"error": "Comment approval not supported"}), 400
+        
+        # Update comments
+        updated_count = Comment.query.filter(Comment.id.in_(comment_ids)).update(
+            {
+                Comment.is_approved: approve,
+                Comment.updated_at: datetime.now(timezone.utc) if hasattr(Comment, 'updated_at') else Comment.created_at
+            },
+            synchronize_session=False
+        )
+        
+        db.session.commit()
+        
+        action = "approved" if approve else "disapproved"
+        current_app.logger.info(f"Bulk {action} {updated_count} comments")
+        
         return jsonify({
-            "error": f"Test endpoint error: {str(e)}",
-            "traceback": traceback.format_exc()
-        }), 500
+            "success": True,
+            "message": f"{updated_count} comments {action} successfully",
+            "updated_count": updated_count
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error in bulk approve comments: {e}")
+        return jsonify({"error": "Failed to bulk approve comments"}), 500
 
 # Health check for admin service
 @admin_bp.route("/admin/health", methods=["GET"])

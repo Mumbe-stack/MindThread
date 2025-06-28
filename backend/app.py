@@ -260,7 +260,7 @@ def service_unavailable(error):
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# CORRECTED: Register Blueprints with proper URL prefixes to match frontend expectations
+# 🔧 FIXED: Register Blueprints with proper URL prefixes to match frontend expectations
 try:
     # Frontend expects: /api/posts, /api/comments, etc.
     # So we register blueprints with /api prefix and let each blueprint define its routes
@@ -269,7 +269,7 @@ try:
     app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
     app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
     app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
-    app.register_blueprint(admin_bp, url_prefix="/api/admin")     # admin_bp should define routes like @bp.route('/admin')
+    app.register_blueprint(admin_bp, url_prefix="/api")     # 🔧 FIXED: Changed from "/api/admin" to "/api" since admin.py routes already have "/admin" prefix
     app.register_blueprint(home_bp)                         # home_bp for root routes
     logger.info("All blueprints registered successfully")
 except Exception as e:
@@ -383,7 +383,7 @@ with app.app_context():
             '/api/comments',
             '/api/users',
             '/api/votes/post',
-            '/api/admin/stats',
+            '/api/admin/stats',     # This should now work correctly
             '/api/health'
         ]
         
