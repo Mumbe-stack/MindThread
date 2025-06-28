@@ -125,12 +125,12 @@ def get_comments():
     post_id = request.args.get("post_id", type=int)
     user_id = request.args.get("user_id", type=int)
 
-    # Allow admins to fetch all comments
+    # ✅ Allow admins to get all comments
     if user and user.is_admin and not post_id and not user_id:
         comments = Comment.query.order_by(Comment.created_at.desc()).all()
         return jsonify([c.to_dict() for c in comments]), 200
 
-    # Regular users must use post_id or user_id
+    # 🚫 Block others from accessing without filters
     if not post_id and not user_id:
         return jsonify({"error": "post_id or user_id parameter is required"}), 400
 
