@@ -13,6 +13,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_blocked = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    avatar_url = db.Column(db.String(255), nullable=True)  # 🔧 ADDED: Avatar support
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -30,6 +31,7 @@ class User(db.Model):
             "is_admin": self.is_admin,
             "is_blocked": self.is_blocked,
             "is_active": self.is_active,
+            "avatar_url": self.avatar_url,  # 🔧 ADDED: Include avatar in dict
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
@@ -114,7 +116,8 @@ class Post(db.Model):
             data['username'] = self.user.username
             data['author'] = {
                 'id': self.user.id,
-                'username': self.user.username
+                'username': self.user.username,
+                'avatar_url': self.user.avatar_url  # 🔧 ADDED: Include author avatar
             }
 
         # Add user's vote and like status if current_user is provided
@@ -209,7 +212,8 @@ class Comment(db.Model):
             data['username'] = self.user.username
             data['author'] = {
                 'id': self.user.id,
-                'username': self.user.username
+                'username': self.user.username,
+                'avatar_url': self.user.avatar_url  # 🔧 ADDED: Include author avatar
             }
 
         # Add user's vote and like status if current_user is provided

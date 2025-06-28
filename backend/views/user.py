@@ -27,6 +27,7 @@ except ImportError:
 # Create Blueprint - matches app.py registration pattern
 user_bp = Blueprint('users', __name__)
 
+# 🔧 ADDED: Avatar upload configuration
 UPLOAD_FOLDER = 'uploads/avatars'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
@@ -34,6 +35,38 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# 🔧 ADDED: Helper function to get consistent user data dict with avatar support
+def get_user_data_dict(user):
+    """Helper function to get consistent user data dict with avatar support"""
+    user_data = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_admin": user.is_admin,
+        "is_blocked": user.is_blocked,
+        "is_active": getattr(user, 'is_active', True),
+        "avatar_url": getattr(user, 'avatar_url', None),  # 🔧 ADDED: Always include avatar
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "updated_at": user.updated_at.isoformat() if hasattr(user, 'updated_at') and user.updated_at else None
+    }
+    
+    # Add statistics if available
+    try:
+        user_data.update({
+            "post_count": user.posts.count() if hasattr(user, 'posts') else 0,
+            "comment_count": user.comments.count() if hasattr(user, 'comments') else 0,
+            "vote_count": user.votes.count() if hasattr(user, 'votes') else 0
+        })
+    except Exception as e:
+        current_app.logger.warning(f"Error adding stats for user {user.id}: {e}")
+        user_data.update({
+            "post_count": 0,
+            "comment_count": 0,
+            "vote_count": 0
+        })
+    
+    return user_data
 
 @user_bp.route("/users", methods=["GET"])
 @jwt_required()
@@ -68,32 +101,8 @@ def fetch_all_users():
         users_data = []
         
         for user in users:
-            user_data = {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "is_admin": user.is_admin,
-                "is_blocked": user.is_blocked,
-                "is_active": getattr(user, 'is_active', True),
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "updated_at": user.updated_at.isoformat() if hasattr(user, 'updated_at') and user.updated_at else None
-            }
-            
-            # Add statistics
-            try:
-                user_data.update({
-                    "post_count": user.posts.count() if hasattr(user, 'posts') else 0,
-                    "comment_count": user.comments.count() if hasattr(user, 'comments') else 0,
-                    "vote_count": user.votes.count() if hasattr(user, 'votes') else 0
-                })
-            except Exception as e:
-                current_app.logger.warning(f"Error adding stats for user {user.id}: {e}")
-                user_data.update({
-                    "post_count": 0,
-                    "comment_count": 0,
-                    "vote_count": 0
-                })
-            
+            # 🔧 UPDATED: Use helper function to ensure avatar is included
+            user_data = get_user_data_dict(user)
             users_data.append(user_data)
 
         return jsonify({
@@ -151,6 +160,7 @@ def create_user():
             is_admin=data.get("is_admin", False),
             is_blocked=data.get("is_blocked", False),
             is_active=data.get("is_active", True),
+            avatar_url=None,  # 🔧 ADDED: Initialize avatar as None
             created_at=datetime.now(timezone.utc)
         )
 
@@ -163,14 +173,7 @@ def create_user():
         return jsonify({
             "success": True,
             "message": "User created successfully",
-            "user": {
-                "id": new_user.id,
-                "username": new_user.username,
-                "email": new_user.email,
-                "is_admin": new_user.is_admin,
-                "is_blocked": new_user.is_blocked,
-                "is_active": getattr(new_user, 'is_active', True)
-            }
+            "user": get_user_data_dict(new_user)  # 🔧 UPDATED: Use helper function
         }), 201
 
     except Exception as e:
@@ -181,7 +184,7 @@ def create_user():
 @user_bp.route("/users/<int:user_id>", methods=["GET"])
 @jwt_required()
 def fetch_user_by_id(user_id):
-    """Get user by ID (own profile or admin)"""
+    """Get user by ID (own profile or admin) - UPDATED with avatar support"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -194,16 +197,8 @@ def fetch_user_by_id(user_id):
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        user_data = {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "is_admin": user.is_admin,
-            "is_blocked": user.is_blocked,
-            "is_active": getattr(user, 'is_active', True),
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-            "updated_at": user.updated_at.isoformat() if hasattr(user, 'updated_at') and user.updated_at else None
-        }
+        # 🔧 UPDATED: Use helper function to ensure avatar is included
+        user_data = get_user_data_dict(user)
 
         # Add user's posts and comments if available
         try:
@@ -236,13 +231,14 @@ def fetch_user_by_id(user_id):
 @user_bp.route("/users/me", methods=["GET"])
 @jwt_required()
 def fetch_current_user():
-    """Get current user profile"""
+    """Get current user profile - UPDATED with avatar and better stats support"""
     try:
         user = User.query.get(get_jwt_identity())
 
         if not user:
             return jsonify({"error": "User not found"}), 404
 
+        # 🔧 UPDATED: Enhanced user data with avatar and stats
         user_data = {
             "id": user.id,
             "username": user.username,
@@ -250,6 +246,7 @@ def fetch_current_user():
             "is_admin": user.is_admin,
             "is_blocked": user.is_blocked,
             "is_active": getattr(user, 'is_active', True),
+            "avatar_url": getattr(user, 'avatar_url', None),  # 🔧 ADDED: Include avatar
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "updated_at": user.updated_at.isoformat() if hasattr(user, 'updated_at') and user.updated_at else None
         }
@@ -281,6 +278,12 @@ def fetch_current_user():
                 ]
         except Exception as e:
             current_app.logger.warning(f"Error adding user stats: {e}")
+            # Set default stats if there's an error
+            user_data["stats"] = {
+                "posts_count": 0,
+                "comments_count": 0,
+                "votes_count": 0
+            }
 
         return jsonify(user_data), 200
 
@@ -357,14 +360,7 @@ def update_current_user():
             return jsonify({
                 "success": True,
                 "message": "Profile updated successfully",
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "is_admin": user.is_admin,
-                    "is_blocked": user.is_blocked,
-                    "is_active": getattr(user, 'is_active', True)
-                }
+                "user": get_user_data_dict(user)  # 🔧 UPDATED: Use helper function
             }), 200
         else:
             return jsonify({"message": "No changes made"}), 200
@@ -373,6 +369,50 @@ def update_current_user():
         db.session.rollback()
         current_app.logger.error(f"Failed to update user profile: {e}")
         return jsonify({"error": "Failed to update profile"}), 500
+
+# 🔧 ADDED: Self-deletion endpoint for users to delete their own accounts
+@user_bp.route("/users/me", methods=["DELETE"])
+@jwt_required()
+@block_check_required
+def delete_current_user():
+    """Delete current user's own account"""
+    try:
+        user = User.query.get(get_jwt_identity())
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Store user info for response
+        deleted_user_info = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+
+        # Optional: Clean up avatar file
+        if hasattr(user, 'avatar_url') and user.avatar_url:
+            try:
+                avatar_path = os.path.join(current_app.root_path, user.avatar_url.lstrip('/'))
+                if os.path.exists(avatar_path):
+                    os.remove(avatar_path)
+                    current_app.logger.info(f"Deleted avatar file: {avatar_path}")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to delete avatar file: {e}")
+
+        # Delete user (cascade should handle related posts, comments, votes)
+        db.session.delete(user)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Account deleted successfully",
+            "deleted_user": deleted_user_info
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to delete current user: {e}")
+        return jsonify({"error": "Failed to delete account"}), 500
 
 @user_bp.route("/users/<int:user_id>", methods=["PATCH"])
 @jwt_required()
@@ -444,14 +484,7 @@ def update_user_by_id(user_id):
             return jsonify({
                 "success": True,
                 "message": "User updated successfully",
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "is_admin": user.is_admin,
-                    "is_blocked": user.is_blocked,
-                    "is_active": getattr(user, 'is_active', True)
-                }
+                "user": get_user_data_dict(user)  # 🔧 UPDATED: Use helper function
             }), 200
         else:
             return jsonify({"message": "No changes made"}), 200
@@ -583,7 +616,7 @@ def unblock_user(user_id):
 @jwt_required()
 @block_check_required
 def upload_avatar():
-    """Upload user avatar"""
+    """Upload user avatar - FULLY IMPLEMENTED"""
     try:
         user = User.query.get(get_jwt_identity())
         
@@ -622,15 +655,16 @@ def upload_avatar():
             # Save file
             file.save(file_path)
             
-            # Update user avatar path in database (assuming there's an avatar_url field)
+            # Update user avatar path in database
             avatar_url = f"/uploads/avatars/{filename}"
-            if hasattr(user, 'avatar_url'):
-                user.avatar_url = avatar_url
+            user.avatar_url = avatar_url
             
             if hasattr(user, 'updated_at'):
                 user.updated_at = datetime.now(timezone.utc)
             
             db.session.commit()
+
+            current_app.logger.info(f"Avatar uploaded for user {user.id}: {avatar_url}")
 
             return jsonify({
                 "success": True,
@@ -678,12 +712,9 @@ def search_users():
                 "email": user.email if current_user.is_admin else None,  # Only show email to admin
                 "is_admin": user.is_admin,
                 "is_blocked": user.is_blocked,
+                "avatar_url": getattr(user, 'avatar_url', None),  # 🔧 ADDED: Include avatar
                 "created_at": user.created_at.isoformat() if user.created_at else None
             }
-            
-            # Add avatar if available
-            if hasattr(user, 'avatar_url') and user.avatar_url:
-                user_data["avatar_url"] = user.avatar_url
             
             users_data.append(user_data)
 

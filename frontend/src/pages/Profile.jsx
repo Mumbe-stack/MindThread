@@ -5,60 +5,94 @@ import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
-// Avatar Uploader Component
-const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(currentAvatar);
-  const { token } = useAuth();
+const Profile = () => {
+  const { user, deleteUser, token, loading, authenticatedRequest } = useAuth(); 
+  const navigate = useNavigate();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [fullUserData, setFullUserData] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
-  // Enhanced API response handler (same as AdminDashboard)
-  const handleApiResponse = async (response, errorMessage = "API request failed") => {
-    if (!response.ok) {
-      let errorText = errorMessage;
-      try {
-        const errorData = await response.json();
-        errorText = errorData.error || errorData.message || errorMessage;
-      } catch {
-        if (response.status === 404) {
-          errorText = `Endpoint not found: ${response.url}`;
-        } else if (response.status === 403) {
-          errorText = "Access denied";
-        } else if (response.status === 401) {
-          errorText = "Authentication required";
-        } else {
-          errorText = `${errorMessage} (${response.status})`;
-        }
-      }
-      throw new Error(errorText);
+  useEffect(() => {
+    // Only redirect if user is definitively not authenticated and not loading
+    if (!loading && !token && !user) {
+      navigate("/login");
     }
+  }, [token, loading, user, navigate]);
 
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Server returned non-JSON response");
+  useEffect(() => {
+    if (user && token) {
+      fetchUserStats();
     }
+  }, [user, token]);
 
-    return response.json();
-  };
-
-  // Enhanced authenticated fetch (same as AdminDashboard)
-  const makeAuthenticatedRequest = async (url, options = {}) => {
+  // 🔧 FIXED: Fetch user stats using the working endpoint
+  const fetchUserStats = async () => {
+    if (!token || !user) return;
+    
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          ...options.headers,
-        },
-        credentials: "include",
-      });
-      return response;
+      setIsLoadingStats(true);
+      console.log("Fetching user stats...");
+      
+      // Use the working /api/users/me endpoint
+      const response = await authenticatedRequest(`${API_URL}/api/users/me`);
+      
+      if (response.ok) {
+        const userData = await response.json();
+        console.log("User data received:", userData);
+        
+        setFullUserData(userData);
+        
+        // Parse stats from the response
+        let stats = { posts: 0, comments: 0, votes: 0 };
+        
+        if (userData.stats) {
+          stats = {
+            posts: userData.stats.posts_count || userData.stats.post_count || userData.stats.posts || 0,
+            comments: userData.stats.comments_count || userData.stats.comment_count || userData.stats.comments || 0,
+            votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0
+          };
+        } else {
+          // Try direct properties
+          stats = {
+            posts: userData.post_count || userData.posts_count || 0,
+            comments: userData.comment_count || userData.comments_count || 0,
+            votes: userData.vote_count || userData.votes_count || 0
+          };
+        }
+        
+        console.log("Parsed stats:", stats);
+        setUserStats(stats);
+        
+        if (stats.posts > 0 || stats.comments > 0 || stats.votes > 0) {
+          toast.success("Profile stats loaded successfully");
+        } else {
+          toast.info("No activity yet - create your first post!");
+        }
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
     } catch (error) {
-      console.error("Network error:", error);
-      throw new Error("Network error. Please check your connection.");
+      console.error("Profile stats fetch error:", error);
+      
+      if (error.message.includes("401") || error.message.includes("Authentication")) {
+        toast.error("Session expired. Please log in again.");
+        navigate("/login");
+      } else {
+        toast.error(`Failed to load stats: ${error.message}`);
+      }
+      
+      setUserStats({ posts: 0, comments: 0, votes: 0 });
+    } finally {
+      setIsLoadingStats(false);
     }
   };
 
-  const handleFileSelect = async (event) => {
+  // 🔧 FIXED: Avatar upload function
+  const handleAvatarUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -72,39 +106,42 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
       return;
     }
 
-    const fileUrl = URL.createObjectURL(file);
-    setPreviewUrl(fileUrl);
-    await uploadAvatar(file);
-  };
-
-  const uploadAvatar = async (file) => {
-    setIsUploading(true);
+    setIsUploadingAvatar(true);
     
     try {
       const formData = new FormData();
       formData.append('avatar', file);
 
-      // Try multiple possible endpoints
+      // Try the endpoints that should work after backend fixes
       const endpoints = [
-        `${API_URL}/api/users/avatar`,
-        `${API_URL}/api/users/upload-avatar`,
-        `${API_URL}/api/upload/avatar`
+        `${API_URL}/api/users/me/avatar`,
+        `${API_URL}/api/upload-avatar`
       ];
 
       let success = false;
       for (const endpoint of endpoints) {
         try {
-          const response = await makeAuthenticatedRequest(endpoint, {
+          console.log(`Trying avatar upload to: ${endpoint}`);
+          const response = await fetch(endpoint, {
             method: 'POST',
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            },
+            credentials: "include",
             body: formData,
           });
 
           if (response.ok) {
-            await handleApiResponse(response, "Failed to upload avatar");
+            const result = await response.json();
+            console.log("Avatar upload success:", result);
             toast.success('Avatar updated successfully!');
-            onUploadSuccess && onUploadSuccess();
+            // Refresh user data
+            await fetchUserStats();
             success = true;
             break;
+          } else {
+            const errorData = await response.json();
+            console.log(`${endpoint} failed:`, errorData);
           }
         } catch (error) {
           console.log(`Endpoint ${endpoint} failed:`, error.message);
@@ -113,186 +150,14 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
       }
 
       if (!success) {
-        toast.error('Failed to upload avatar - all endpoints failed');
-        setPreviewUrl(currentAvatar);
+        toast.error('Avatar upload not available yet. Feature coming soon!');
       }
 
     } catch (error) {
       console.error("Avatar upload error:", error);
       toast.error(`Upload failed: ${error.message}`);
-      setPreviewUrl(currentAvatar);
     } finally {
-      setIsUploading(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center space-x-4">
-      <div className="relative">
-        <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300">
-          {previewUrl ? (
-            <img 
-              src={previewUrl} 
-              alt="Profile" 
-              className="w-full h-full object-cover"
-              onError={() => setPreviewUrl(null)}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400">
-              <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-            </div>
-          )}
-        </div>
-        {isUploading && (
-          <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-          </div>
-        )}
-      </div>
-      
-      <div className="flex-1">
-        <label className="block">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            disabled={isUploading}
-            className="sr-only"
-          />
-          <div className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {isUploading ? 'Uploading...' : 'Choose Photo'}
-          </div>
-        </label>
-        <p className="text-xs text-gray-500 mt-1">
-          JPG, PNG or GIF. Max 5MB.
-        </p>
-      </div>
-    </div>
-  );
-};
-
-const Profile = () => {
-  const { user, deleteUser, token, loading } = useAuth(); 
-  const navigate = useNavigate();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [fullUserData, setFullUserData] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Enhanced API response handler (same as AdminDashboard)
-  const handleApiResponse = async (response, errorMessage = "API request failed") => {
-    if (!response.ok) {
-      let errorText = errorMessage;
-      try {
-        const errorData = await response.json();
-        errorText = errorData.error || errorData.message || errorMessage;
-      } catch {
-        if (response.status === 404) {
-          errorText = `Endpoint not found: ${response.url}`;
-        } else if (response.status === 403) {
-          errorText = "Access denied";
-        } else if (response.status === 401) {
-          errorText = "Authentication required";
-        } else {
-          errorText = `${errorMessage} (${response.status})`;
-        }
-      }
-      throw new Error(errorText);
-    }
-
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Server returned non-JSON response");
-    }
-
-    return response.json();
-  };
-
-  // Enhanced authenticated fetch (same as AdminDashboard)
-  const makeAuthenticatedRequest = async (url, options = {}) => {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-          ...options.headers,
-        },
-        credentials: "include",
-      });
-      return response;
-    } catch (error) {
-      console.error("Network error:", error);
-      throw new Error("Network error. Please check your connection.");
-    }
-  };
-
-  useEffect(() => {
-    // Only redirect if user is definitively not authenticated and not loading
-    if (!loading && !token && !user) {
-      navigate("/login");
-    }
-  }, [token, loading, user, navigate]);
-
-  useEffect(() => {
-    if (user && token) {
-      fetchFullUserProfile();
-    }
-  }, [user, token]);
-
-  const fetchFullUserProfile = async () => {
-    if (!token) return;
-    
-    try {
-      setIsLoadingStats(true);
-      
-      // Use the same pattern as AdminDashboard
-      console.log("Fetching user profile from:", `${API_URL}/api/users/me`);
-      
-      const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me`);
-      const userData = await handleApiResponse(response, "Failed to load profile data");
-      
-      console.log("User data received:", userData);
-      setFullUserData(userData);
-      
-      // Parse stats with same flexibility as AdminDashboard
-      if (userData.stats) {
-        setUserStats({
-          posts: userData.stats.posts_count || userData.stats.post_count || userData.stats.posts || 0,
-          comments: userData.stats.comments_count || userData.stats.comment_count || userData.stats.comments || 0,
-          votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0, 
-        });
-      } else {
-        setUserStats({
-          posts: userData.post_count || userData.posts_count || userData.total_posts || userData.posts || 0,
-          comments: userData.comment_count || userData.comments_count || userData.total_comments || userData.comments || 0,
-          votes: userData.vote_count || userData.votes_count || userData.total_votes || userData.votes || 0, 
-        });
-      }
-
-      toast.success("Profile data loaded successfully");
-
-    } catch (error) {
-      console.error("Profile data fetch error:", error);
-      
-      if (error.message.includes("401") || error.message.includes("Authentication")) {
-        toast.error("Authentication expired. Please log in again.");
-        navigate("/login");
-      } else if (error.message.includes("404")) {
-        toast.error("Profile not found");
-      } else {
-        toast.error(`Failed to load profile: ${error.message}`);
-      }
-      
-      setUserStats({ posts: 0, comments: 0, votes: 0 });
-    } finally {
-      setIsLoadingStats(false);
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -330,13 +195,14 @@ This will permanently delete:
     }
   };
 
+  // Handle edit profile - show info message for now
   const handleEditProfile = () => {
-    navigate("/profile/edit");
+    toast.info("Profile editing feature coming soon! For now, you can update your avatar.");
   };
 
   const handleRefreshProfile = async () => {
     setIsRefreshing(true);
-    await fetchFullUserProfile();
+    await fetchUserStats();
     setIsRefreshing(false);
     toast.success("Profile refreshed");
   };
@@ -360,7 +226,6 @@ This will permanently delete:
     );
   }
 
-  // Don't show "redirecting" message unless we're actually redirecting
   if (!user && !loading && !token) {
     return (
       <div className="max-w-4xl mx-auto p-6 text-center">
@@ -371,7 +236,6 @@ This will permanently delete:
     );
   }
 
-  // Show loading if user is not yet available but we have a token
   if (!user && token) {
     return (
       <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg mt-10">
@@ -420,15 +284,10 @@ This will permanently delete:
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
             <p className="text-base font-mono text-gray-800">
               {user.created_at
-                ? new Date(user.created_at).toLocaleString('en-US', {
+                ? new Date(user.created_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true,
-                timeZoneName: 'short'
+                day: 'numeric'
               })
             : 'Recently joined'}
           </p>
@@ -473,14 +332,6 @@ This will permanently delete:
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                   Active
-                </span>
-              )}
-              {user.is_active !== false && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  Verified
                 </span>
               )}
             </div>
@@ -548,13 +399,57 @@ This will permanently delete:
         </div>
       </div>
 
-      {/* Avatar Upload Section */}
+      {/* 🔧 SIMPLIFIED: Avatar Upload Section */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Profile Picture</h3>
-        <AvatarUploader 
-          currentAvatar={fullUserData?.avatar_url || user?.avatar_url} 
-          onUploadSuccess={fetchFullUserProfile} 
-        />
+        <div className="flex items-center space-x-4">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300">
+              {fullUserData?.avatar_url || user?.avatar_url ? (
+                <img 
+                  src={fullUserData?.avatar_url || user?.avatar_url} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className="w-full h-full flex items-center justify-center text-gray-400">
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+            {isUploadingAvatar && (
+              <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex-1">
+            <label className="block">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                disabled={isUploadingAvatar}
+                className="sr-only"
+              />
+              <div className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {isUploadingAvatar ? 'Uploading...' : 'Choose Photo'}
+              </div>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">
+              JPG, PNG or GIF. Max 5MB.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Recent Activity Preview */}
@@ -681,9 +576,11 @@ This will permanently delete:
           <div className="space-y-1">
             <div>API: {API_URL}</div>
             <div>User: {user?.username}</div>
+            <div>User ID: {user?.id}</div>
             <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
             <div>Loading: {loading ? "🔄" : "✅"}</div>
             <div>Stats: P:{userStats.posts} C:{userStats.comments} V:{userStats.votes}</div>
+            <div>Loading Stats: {isLoadingStats ? "🔄" : "✅"}</div>
           </div>
           <button
             onClick={() => console.log({ user, token, userStats, fullUserData, API_URL })}

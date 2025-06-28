@@ -113,11 +113,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login function - FIXED to handle actual server response format
+  // 🔧 FIXED: Login function to handle correct server response format
   const login = async (credentials) => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log("Attempting login with:", { ...credentials, password: "[HIDDEN]" });
 
       const response = await fetch(`${API_URL}/api/login`, {
         method: "POST",
@@ -129,32 +131,43 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
+      console.log("Login response:", { ...data, access_token: data.access_token ? "[PRESENT]" : "[MISSING]" });
 
-      if (response.ok) {
-        // Handle the actual response format from your server
-        const { access_token, email, username, user_id, is_admin, is_active, message, success } = data;
+      if (response.ok && data.success) {
+        // 🔧 FIXED: Handle the correct nested response format
+        const { access_token, refresh_token, user: userData, message } = data;
         
-        if (access_token && success) {
-          // Construct user object from the response data
-          const userData = {
-            id: user_id,
-            email: email,
-            username: username,
-            is_admin: is_admin || false,
-            is_active: is_active !== false, // default to true if not specified
+        if (access_token && userData) {
+          // Use the nested user object from the server response
+          const userInfo = {
+            id: userData.id,
+            username: userData.username,
+            email: userData.email,
+            is_admin: userData.is_admin || false,
+            is_blocked: userData.is_blocked || false,
+            is_active: userData.is_active !== false, // default to true if not specified
+            created_at: userData.created_at,
+            updated_at: userData.updated_at
           };
           
+          console.log("Setting user data:", userInfo);
+          
           setToken(access_token);
-          setUser(userData);
+          setUser(userInfo);
           
           // Store in localStorage
           localStorage.setItem("token", access_token);
-          localStorage.setItem("user", JSON.stringify(userData));
+          localStorage.setItem("user", JSON.stringify(userInfo));
+          
+          // Store refresh token if provided
+          if (refresh_token) {
+            localStorage.setItem("refresh_token", refresh_token);
+          }
           
           toast.success(message || "Login successful!");
-          return { success: true, user: userData };
+          return { success: true, user: userInfo };
         } else {
-          throw new Error("Invalid response format");
+          throw new Error("Invalid response format: missing token or user data");
         }
       } else {
         const errorMessage = data.error || data.message || "Login failed";
@@ -173,11 +186,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register function - FIXED to handle actual server response format
+  // 🔧 FIXED: Register function to handle correct server response format
   const register = async (userData) => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log("Attempting registration with:", { ...userData, password: "[HIDDEN]" });
 
       const response = await fetch(`${API_URL}/api/register`, {
         method: "POST",
@@ -189,20 +204,26 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
+      console.log("Registration response:", { ...data, access_token: data.access_token ? "[PRESENT]" : "[MISSING]" });
 
-      if (response.ok) {
-        // Handle the actual response format from your server
-        const { access_token, email, username, user_id, is_admin, is_active, message, success } = data;
+      if (response.ok && data.success) {
+        // 🔧 FIXED: Handle the correct nested response format
+        const { access_token, refresh_token, user: userInfo, message } = data;
         
-        if (access_token && success) {
-          // Construct user object from the response data
+        if (access_token && userInfo) {
+          // Use the nested user object from the server response
           const newUser = {
-            id: user_id,
-            email: email,
-            username: username,
-            is_admin: is_admin || false,
-            is_active: is_active !== false,
+            id: userInfo.id,
+            username: userInfo.username,
+            email: userInfo.email,
+            is_admin: userInfo.is_admin || false,
+            is_blocked: userInfo.is_blocked || false,
+            is_active: userInfo.is_active !== false,
+            created_at: userInfo.created_at,
+            updated_at: userInfo.updated_at
           };
+          
+          console.log("Setting registered user data:", newUser);
           
           setToken(access_token);
           setUser(newUser);
@@ -210,6 +231,11 @@ export const AuthProvider = ({ children }) => {
           // Store in localStorage
           localStorage.setItem("token", access_token);
           localStorage.setItem("user", JSON.stringify(newUser));
+          
+          // Store refresh token if provided
+          if (refresh_token) {
+            localStorage.setItem("refresh_token", refresh_token);
+          }
           
           toast.success(message || "Registration successful!");
           return { success: true, user: newUser };
@@ -234,7 +260,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout function - CORRECTED to use /api/logout
+  // Logout function
   const logout = async (showMessage = true) => {
     try {
       if (token) {
@@ -260,10 +286,42 @@ export const AuthProvider = ({ children }) => {
       // Clear localStorage
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      localStorage.removeItem("refresh_token");
       
       if (showMessage) {
         toast.success("Logged out successfully");
       }
+    }
+  };
+
+  // Delete user account
+  const deleteUser = async () => {
+    try {
+      setLoading(true);
+      
+      if (!user || !token) {
+        throw new Error("No user logged in");
+      }
+
+      const response = await authenticatedRequest(`${API_URL}/api/users/${user.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        // Log out after successful deletion
+        await logout(false);
+        return { success: true };
+      } else {
+        const data = await response.json();
+        const errorMessage = data.error || "Failed to delete account";
+        throw new Error(errorMessage);
+      }
+    } catch (error) {
+      console.error("Delete user error:", error);
+      toast.error(error.message || "Failed to delete account");
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -340,10 +398,17 @@ export const AuthProvider = ({ children }) => {
   // Refresh token function
   const refreshToken = async () => {
     try {
+      const refresh_token = localStorage.getItem("refresh_token");
+      
+      if (!refresh_token) {
+        logout(false);
+        return false;
+      }
+
       const response = await fetch(`${API_URL}/api/refresh`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${refresh_token}`,
           "Content-Type": "application/json",
         },
         credentials: "include",
@@ -384,10 +449,11 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        setUser(data.user || data);
-        localStorage.setItem("user", JSON.stringify(data.user || data));
+        const updatedUser = data.user || data;
+        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(updatedUser));
         toast.success("Profile updated successfully!");
-        return { success: true, user: data.user || data };
+        return { success: true, user: updatedUser };
       } else {
         const errorMessage = data.error || "Failed to update profile";
         setError(errorMessage);
@@ -431,6 +497,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    deleteUser,
     
     // Profile management
     changePassword,
