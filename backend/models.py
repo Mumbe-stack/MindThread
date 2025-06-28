@@ -1,6 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
-import hashlib
 
 db = SQLAlchemy()
 
@@ -20,12 +19,9 @@ class User(db.Model):
 
     # Relationships
     posts = db.relationship("Post", backref="user", lazy=True, cascade="all, delete-orphan")
-    comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan", foreign_keys="Comment.user_id")
+    comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan")
     votes = db.relationship('Vote', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     likes = db.relationship('Like', backref='user', lazy='dynamic', cascade='all, delete-orphan')
-    
-    # Comments approved by this admin
-    approved_comments = db.relationship('Comment', foreign_keys='Comment.approved_by', backref='approver', lazy='dynamic')
 
     def to_dict(self):
         return {
@@ -55,7 +51,7 @@ class Post(db.Model):
 
     # Approval and flagging fields
     is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Changed default to False
 
     # Foreign key
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
@@ -154,57 +150,40 @@ class Comment(db.Model):
 
     # Approval and flagging fields
     is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    
-    # New approval tracking fields
-    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
-    approved_at = db.Column(db.DateTime, nullable=True)
-    original_content = db.Column(db.Text, nullable=True)  # Content at time of approval
-    content_hash = db.Column(db.String(64), nullable=True)  # Hash to detect changes
+    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Changed default to False
 
     # Relationships
+    votes = db.relationship('Vote', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
     likes = db.relationship('Like', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
     
     # Self-referential relationship for replies
     replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), lazy='dynamic')
 
-    def generate_content_hash(self):
-        """Generate a hash of the current content"""
-        if not self.content:
-            return None
-        return hashlib.sha256(self.content.encode('utf-8')).hexdigest()
-
-    def has_content_changed(self):
-        """Check if content has changed since last approval"""
-        if not self.content_hash:
-            return True  # No hash means never been approved or hash not set
-        current_hash = self.generate_content_hash()
-        return current_hash != self.content_hash
-
-    def approve(self, admin_user):
-        """Approve the comment and track the approval"""
-        self.is_approved = True
-        self.approved_by = admin_user.id
-        self.approved_at = datetime.now(timezone.utc)
-        self.original_content = self.content
-        self.content_hash = self.generate_content_hash()
-
-    def disapprove(self):
-        """Disapprove the comment"""
-        self.is_approved = False
-        # Keep approval history for audit purposes
-        # self.approved_by = None
-        # self.approved_at = None
-
-    def requires_reapproval(self):
-        """Check if comment requires re-approval due to content changes"""
-        return self.is_approved and self.has_content_changed()
-
-    # Computed properties for likes (NO VOTING for comments)
+    # Computed properties for likes and votes
     @property
     def likes_count(self):
         """Get the number of users who liked this comment"""
         return self.likes.count()
+
+    @property
+    def vote_score(self):
+        """Get the total vote score (upvotes - downvotes)"""
+        return sum(vote.value for vote in self.votes)
+
+    @property
+    def upvotes_count(self):
+        """Get the number of upvotes"""
+        return self.votes.filter_by(value=1).count()
+
+    @property
+    def downvotes_count(self):
+        """Get the number of downvotes"""
+        return self.votes.filter_by(value=-1).count()
+
+    @property
+    def total_votes(self):
+        """Get the total number of votes"""
+        return self.votes.count()
 
     @property
     def replies_count(self):
@@ -224,10 +203,11 @@ class Comment(db.Model):
             'is_approved': self.is_approved,
             'is_flagged': self.is_flagged,
             'likes_count': self.likes_count,
-            'replies_count': self.replies_count,
-            'requires_reapproval': self.requires_reapproval(),
-            'approved_at': self.approved_at.isoformat() if self.approved_at else None,
-            'has_content_changed': self.has_content_changed()
+            'vote_score': self.vote_score,
+            'upvotes_count': self.upvotes_count,
+            'downvotes_count': self.downvotes_count,
+            'total_votes': self.total_votes,
+            'replies_count': self.replies_count
         }
         
         if include_author and self.user:
@@ -238,26 +218,20 @@ class Comment(db.Model):
                 'avatar_url': self.user.avatar_url
             }
 
-        # Add user's like status if current_user is provided
+        # Add user's vote and like status if current_user is provided
         if current_user:
+            user_vote = self.votes.filter_by(user_id=current_user.id).first()
+            data['user_vote'] = user_vote.value if user_vote else None
+            data['userVote'] = user_vote.value if user_vote else None  # For compatibility
+            
             user_like = self.likes.filter_by(user_id=current_user.id).first()
             data['user_liked'] = user_like is not None
             data['liked_by_user'] = user_like is not None  # For compatibility
-
-        # Add approval info for admins
-        if current_user and current_user.is_admin:
-            if self.approver:
-                data['approved_by'] = {
-                    'id': self.approver.id,
-                    'username': self.approver.username
-                }
-            data['original_content'] = self.original_content
         
         return data
 
     def __repr__(self):
-        approval_status = "approved" if self.is_approved else "pending"
-        return f"<Comment {self.content[:20]}... ({approval_status})>"
+        return f"<Comment {self.content[:20]}...>"
 
 class Vote(db.Model):
     __tablename__ = 'votes'
@@ -266,18 +240,23 @@ class Vote(db.Model):
     value = db.Column(db.Integer, nullable=False)  # 1 for upvote, -1 for downvote
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    # Foreign keys - REMOVED comment_id (posts only)
+    # Foreign keys
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True, index=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
 
-    # Constraints - Updated to only allow post voting
+    # Constraints to ensure data integrity
     __table_args__ = (
-        # Ensure one vote per user per post
+        # Ensure one vote per user per post/comment
         db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_vote'),
+        db.UniqueConstraint('user_id', 'comment_id', name='unique_user_comment_vote'),
         # Ensure valid vote values
         db.CheckConstraint('value IN (1, -1)', name='valid_vote_value'),
-        # Ensure post_id is not null
-        db.CheckConstraint('post_id IS NOT NULL', name='vote_post_required')
+        # Ensure vote targets either post OR comment, not both
+        db.CheckConstraint(
+            '(post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)', 
+            name='vote_target_constraint'
+        )
     )
 
     def to_dict(self):
@@ -286,12 +265,14 @@ class Vote(db.Model):
             'id': self.id,
             'user_id': self.user_id,
             'post_id': self.post_id,
+            'comment_id': self.comment_id,
             'value': self.value,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
     def __repr__(self):
-        return f"<Vote user_id={self.user_id} Post {self.post_id} value={self.value}>"
+        target = f"Post {self.post_id}" if self.post_id else f"Comment {self.comment_id}"
+        return f"<Vote user_id={self.user_id} {target} value={self.value}>"
 
 class Like(db.Model):
     __tablename__ = 'likes'
@@ -299,7 +280,7 @@ class Like(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    # Foreign keys - Keep both post and comment likes
+    # Foreign keys
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True, index=True)
     comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
