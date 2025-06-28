@@ -464,15 +464,15 @@ const AdminDashboard = () => {
       // 🔧 FIXED: Use admin endpoints for flag and approve actions
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api//${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api//${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
           break;
         case "delete":
           if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) {
