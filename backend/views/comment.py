@@ -455,3 +455,131 @@ def test_comments():
         current_app.logger.error(f"Error in test endpoint: {e}")
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Test failed: {str(e)}"}), 500
+    
+    
+# Add these endpoints to your comment.py file
+
+@comment_bp.route("/comments/<int:comment_id>/flag", methods=["POST"])
+@jwt_required()
+def flag_comment(comment_id):
+    """Flag a comment as inappropriate (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+
+        # Flag the comment
+        if hasattr(comment, 'is_flagged'):
+            comment.is_flagged = True
+        if hasattr(comment, 'flagged_at'):
+            comment.flagged_at = datetime.now(timezone.utc)
+        if hasattr(comment, 'updated_at'):
+            comment.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Comment flagged successfully",
+            "comment": {
+                "id": comment.id,
+                "content": comment.content[:50] + "..." if len(comment.content) > 50 else comment.content,
+                "is_flagged": getattr(comment, 'is_flagged', True)
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to flag comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to flag comment"}), 500
+
+@comment_bp.route("/comments/<int:comment_id>/unflag", methods=["POST"])
+@jwt_required()
+def unflag_comment(comment_id):
+    """Remove flag from a comment (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+
+        # Unflag the comment
+        if hasattr(comment, 'is_flagged'):
+            comment.is_flagged = False
+        if hasattr(comment, 'flagged_at'):
+            comment.flagged_at = None
+        if hasattr(comment, 'updated_at'):
+            comment.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Comment unflagged successfully",
+            "comment": {
+                "id": comment.id,
+                "content": comment.content[:50] + "..." if len(comment.content) > 50 else comment.content,
+                "is_flagged": getattr(comment, 'is_flagged', False)
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to unflag comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to unflag comment"}), 500
+
+@comment_bp.route("/comments/<int:comment_id>/approve", methods=["PATCH"])
+@jwt_required()
+def approve_comment(comment_id):
+    """Approve a flagged comment (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        comment = Comment.query.get(comment_id)
+        if not comment:
+            return jsonify({"error": "Comment not found"}), 404
+
+        data = request.get_json() or {}
+        
+        # Approve the comment (remove flag)
+        if hasattr(comment, 'is_flagged'):
+            comment.is_flagged = False
+        if hasattr(comment, 'is_approved'):
+            comment.is_approved = data.get('is_approved', True)
+        if hasattr(comment, 'flagged_at'):
+            comment.flagged_at = None
+        if hasattr(comment, 'updated_at'):
+            comment.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Comment approved successfully",
+            "comment": {
+                "id": comment.id,
+                "content": comment.content[:50] + "..." if len(comment.content) > 50 else comment.content,
+                "is_flagged": getattr(comment, 'is_flagged', False),
+                "is_approved": getattr(comment, 'is_approved', True)
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to approve comment {comment_id}: {e}")
+        return jsonify({"error": "Failed to approve comment"}), 500

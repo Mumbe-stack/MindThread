@@ -1,7 +1,7 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from models import db, Post, User, Comment, Like, Vote
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -500,3 +500,131 @@ def flag_post(post_id):
             'error': 'Failed to flag post',
             'message': str(e)
         }), 500
+        
+        
+    # Add these endpoints to your post.py file
+
+@post_bp.route("/posts/<int:post_id>/flag", methods=["POST"])
+@jwt_required()
+def flag_post(post_id):
+    """Flag a post as inappropriate (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
+
+        # Flag the post
+        if hasattr(post, 'is_flagged'):
+            post.is_flagged = True
+        if hasattr(post, 'flagged_at'):
+            post.flagged_at = datetime.now(timezone.utc)
+        if hasattr(post, 'updated_at'):
+            post.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Post flagged successfully",
+            "post": {
+                "id": post.id,
+                "title": post.title,
+                "is_flagged": getattr(post, 'is_flagged', True)
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to flag post {post_id}: {e}")
+        return jsonify({"error": "Failed to flag post"}), 500
+
+@post_bp.route("/posts/<int:post_id>/unflag", methods=["POST"])
+@jwt_required()
+def unflag_post(post_id):
+    """Remove flag from a post (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
+
+        # Unflag the post
+        if hasattr(post, 'is_flagged'):
+            post.is_flagged = False
+        if hasattr(post, 'flagged_at'):
+            post.flagged_at = None
+        if hasattr(post, 'updated_at'):
+            post.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Post unflagged successfully",
+            "post": {
+                "id": post.id,
+                "title": post.title,
+                "is_flagged": getattr(post, 'is_flagged', False)
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to unflag post {post_id}: {e}")
+        return jsonify({"error": "Failed to unflag post"}), 500
+
+@post_bp.route("/posts/<int:post_id>/approve", methods=["PATCH"])
+@jwt_required()
+def approve_post(post_id):
+    """Approve a flagged post (admin only)"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        
+        if not current_user or not current_user.is_admin:
+            return jsonify({"error": "Admin privileges required"}), 403
+
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
+
+        data = request.get_json() or {}
+        
+        # Approve the post (remove flag)
+        if hasattr(post, 'is_flagged'):
+            post.is_flagged = False
+        if hasattr(post, 'is_approved'):
+            post.is_approved = data.get('is_approved', True)
+        if hasattr(post, 'flagged_at'):
+            post.flagged_at = None
+        if hasattr(post, 'updated_at'):
+            post.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Post approved successfully",
+            "post": {
+                "id": post.id,
+                "title": post.title,
+                "is_flagged": getattr(post, 'is_flagged', False),
+                "is_approved": getattr(post, 'is_approved', True)
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to approve post {post_id}: {e}")
+        return jsonify({"error": "Failed to approve post"}), 500
