@@ -1,3 +1,6 @@
+// frontend/src/context/AuthContext.jsx
+// Add this function to your EXISTING AuthContext.jsx file
+
 import { createContext, useContext, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 
@@ -35,7 +38,6 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
-        // Clear invalid data
         localStorage.removeItem("token");
         localStorage.removeItem("user");
       } finally {
@@ -68,7 +70,6 @@ export const AuthProvider = ({ children }) => {
         }
         return true;
       } else {
-        // Token is invalid
         logout();
         return false;
       }
@@ -99,7 +100,6 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch(url, finalOptions);
 
-      // Handle token expiration
       if (response.status === 401) {
         logout();
         toast.error("Session expired. Please log in again.");
@@ -113,13 +113,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ===== MISSING FUNCTION - ADD THIS =====
-  // Get comments for a specific post
+  // ADD THIS FUNCTION - This is what's missing and causing your error
   const getPostComments = async (postId) => {
     try {
       if (!postId) {
-        throw new Error('Post ID is required');
+        console.error('Post ID is required for getPostComments');
+        return { success: false, error: 'Post ID is required', comments: [] };
       }
+
+      console.log(`Fetching comments for post ${postId}`);
 
       const headers = {
         'Content-Type': 'application/json',
@@ -136,9 +138,11 @@ export const AuthProvider = ({ children }) => {
         credentials: 'include',
       });
 
+      console.log(`Comments API response status: ${response.status}`);
+
       if (!response.ok) {
         if (response.status === 404) {
-          // No comments found, return empty array
+          console.log('No comments found, returning empty array');
           return {
             success: true,
             comments: [],
@@ -147,13 +151,16 @@ export const AuthProvider = ({ children }) => {
         }
         
         const errorData = await response.json().catch(() => ({}));
+        console.error('Comments API error:', errorData);
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log(`Successfully fetched ${data.comments?.length || 0} comments`);
+      
       return {
         success: true,
-        comments: data.comments || data,
+        comments: data.comments || [],
         pagination: data.pagination || null,
       };
 
@@ -167,7 +174,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Create a new comment
+  // CREATE COMMENT FUNCTION
   const createComment = async (postId, content) => {
     try {
       if (!postId || !content || !token) {
@@ -191,7 +198,7 @@ export const AuthProvider = ({ children }) => {
       toast.success('Comment added successfully!');
       return {
         success: true,
-        comment: data.comment || data,
+        comment: data,
       };
 
     } catch (error) {
@@ -204,7 +211,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update an existing comment
+  // UPDATE COMMENT FUNCTION
   const updateComment = async (commentId, content) => {
     try {
       if (!commentId || !content || !token) {
@@ -227,7 +234,7 @@ export const AuthProvider = ({ children }) => {
       toast.success('Comment updated successfully!');
       return {
         success: true,
-        comment: data.comment || data,
+        comment: data,
       };
 
     } catch (error) {
@@ -240,7 +247,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Delete a comment
+  // DELETE COMMENT FUNCTION
   const deleteComment = async (commentId) => {
     try {
       if (!commentId || !token) {
@@ -271,7 +278,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Like or unlike a comment
+  // LIKE COMMENT FUNCTION
   const toggleCommentLike = async (commentId) => {
     try {
       if (!commentId || !token) {
@@ -290,7 +297,7 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       return {
         success: true,
-        liked: data.liked,
+        liked: data.liked_by_user,
         likes_count: data.likes_count,
       };
 
@@ -328,7 +335,6 @@ export const AuthProvider = ({ children }) => {
           setToken(access_token);
           setUser(userData);
           
-          // Store in localStorage
           localStorage.setItem("token", access_token);
           localStorage.setItem("user", JSON.stringify(userData));
           
@@ -378,7 +384,6 @@ export const AuthProvider = ({ children }) => {
           setToken(access_token);
           setUser(newUser);
           
-          // Store in localStorage
           localStorage.setItem("token", access_token);
           localStorage.setItem("user", JSON.stringify(newUser));
           
@@ -409,7 +414,6 @@ export const AuthProvider = ({ children }) => {
   const logout = async (showMessage = true) => {
     try {
       if (token) {
-        // Call logout endpoint to invalidate token on server
         await fetch(`${API_URL}/api/auth/logout`, {
           method: "POST",
           headers: {
@@ -421,14 +425,11 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Logout request failed:", error);
-      // Continue with local logout even if server request fails
     } finally {
-      // Clear local state
       setUser(null);
       setToken(null);
       setError(null);
       
-      // Clear localStorage
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       
@@ -531,7 +532,6 @@ export const AuthProvider = ({ children }) => {
         }
       }
       
-      // If refresh fails, logout
       logout(false);
       return false;
     } catch (error) {
@@ -612,8 +612,8 @@ export const AuthProvider = ({ children }) => {
     verifyToken,
     refreshToken,
     
-    // Comment functions - ADDED THESE
-    getPostComments,
+    // Comment functions - THESE ARE THE MISSING FUNCTIONS
+    getPostComments,      // <-- This is the main one causing the error
     createComment,
     updateComment,
     deleteComment,
