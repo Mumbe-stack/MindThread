@@ -45,12 +45,8 @@ const SinglePost = () => {
       const data = await res.json();
       setPost(data);
       
-      // Comments are included in the post response, or fetch separately
-      if (data.comments && Array.isArray(data.comments)) {
-        setComments(data.comments);
-      } else {
-        await fetchComments();
-      }
+      // Fetch comments separately
+      await fetchComments();
     } catch (err) {
       console.error("Error fetching post:", err);
       setError(err.message);
@@ -69,7 +65,6 @@ const SinglePost = () => {
         headers.Authorization = `Bearer ${token}`;
       }
       
-      // Use the correct endpoint for fetching post comments
       const res = await fetch(`${VITE_API_URL}/api/posts/${id}/comments`, {
         headers,
         credentials: "include",
@@ -107,7 +102,7 @@ const SinglePost = () => {
     }
   }, [id, token]); 
 
-  // Vote on post only (removed comment voting)
+  // Vote on post only
   const handlePostVote = async (value) => {
     if (!user || !token) {
       toast.error("Please login to vote");
@@ -137,8 +132,8 @@ const SinglePost = () => {
         setPost(prev => ({
           ...prev,
           vote_score: data.score,
-          upvotes: data.upvotes,
-          downvotes: data.downvotes,
+          upvotes_count: data.upvotes,
+          downvotes_count: data.downvotes,
           total_votes: data.total_votes,
           userVote: data.user_vote
         }));
@@ -306,7 +301,7 @@ const SinglePost = () => {
     }
   };
 
-  // Vote buttons component (only for posts now)
+  // Vote buttons component (only for posts)
   const VoteButtons = ({ score = 0, upvotes = 0, downvotes = 0, userVote = null, onVote }) => (
     <div className="flex items-center bg-gray-50 rounded-xl p-2 space-x-1">
       {/* Upvote */}
@@ -541,7 +536,7 @@ const SinglePost = () => {
                   <div className="text-xs text-gray-600 font-medium">Votes</div>
                 </div>
                 <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl p-4 text-center border border-pink-100">
-                  <div className="text-2xl font-bold text-pink-600">{post.likes_count || post.likes || 0}</div>
+                  <div className="text-2xl font-bold text-pink-600">{post.likes_count || 0}</div>
                   <div className="text-xs text-gray-600 font-medium">Likes</div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 text-center border border-purple-100">
@@ -584,8 +579,8 @@ const SinglePost = () => {
                     <span className="text-sm text-gray-700 font-semibold">Vote:</span>
                     <VoteButtons
                       score={post.vote_score || 0}
-                      upvotes={post.upvotes || 0}
-                      downvotes={post.downvotes || 0}
+                      upvotes={post.upvotes_count || 0}
+                      downvotes={post.downvotes_count || 0}
                       userVote={post.userVote}
                       onVote={handlePostVote}
                     />
@@ -598,7 +593,7 @@ const SinglePost = () => {
                       <LikeButton 
                         type="post" 
                         id={post.id}
-                        initialLikes={post.likes_count || post.likes || 0}
+                        initialLikes={post.likes_count || 0}
                         initialLiked={post.liked_by_user || false}
                       />
                     </div>
@@ -692,7 +687,7 @@ const SinglePost = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                  View All Votes ({(post.upvotes || 0) + (post.downvotes || 0)})
+                  View All Votes ({(post.upvotes_count || 0) + (post.downvotes_count || 0)})
                 </button>
                 <button
                   onClick={resetAllVotes}
@@ -761,12 +756,6 @@ const SinglePost = () => {
         <section className="mt-12">
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200">
             <div className="p-6 sm:p-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                <svg className="w-6 h-6 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                Comments ({comments.length})
-              </h2>
               <CommentBox 
                 postId={post.id} 
                 onCommentSubmit={refreshComments}
