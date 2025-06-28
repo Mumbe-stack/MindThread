@@ -26,26 +26,25 @@ const Posts = () => {
         credentials: "include",
         headers,
       });
-      
+
       const contentType = res.headers.get("content-type") || "";
       if (!res.ok) {
         const raw = await res.text();
         throw new Error(`HTTP ${res.status}: ${raw}`);
       }
-      
+
       if (!contentType.includes("application/json")) {
         const raw = await res.text();
         throw new Error(`Expected JSON but received: ${raw.slice(0, 100)}`);
       }
-      
+
       const data = await res.json();
       const postsArray = Array.isArray(data) ? data : [];
-      
-      // Fetch vote scores for each post
+
       for (const post of postsArray) {
         await fetchPostVotes(post.id);
       }
-      
+
       return postsArray;
     } catch (err) {
       throw new Error(err.message || "Failed to fetch posts");
@@ -57,17 +56,19 @@ const Posts = () => {
       const res = await fetch(`${VITE_API_URL}/api/votes/post/${postId}/score`);
       if (res.ok) {
         const data = await res.json();
-        setPosts(prev => prev.map(post => 
-          post.id === postId 
-            ? { 
-                ...post, 
-                vote_score: data.score, 
-                upvotes: data.upvotes, 
-                downvotes: data.downvotes,
-                total_votes: data.total_votes
-              }
-            : post
-        ));
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === postId
+              ? {
+                  ...post,
+                  vote_score: data.score,
+                  upvotes: data.upvotes,
+                  downvotes: data.downvotes,
+                  total_votes: data.total_votes
+                }
+              : post
+          )
+        );
       }
     } catch (error) {
       console.error("Error fetching post votes:", error);
@@ -89,33 +90,27 @@ const Posts = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          post_id: postId,
-          value: value,
-        }),
+        body: JSON.stringify({ post_id: postId, value }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setPosts(prev => prev.map(post => 
-          post.id === postId 
-            ? { 
-                ...post, 
-                vote_score: data.score, 
-                upvotes: data.upvotes, 
-                downvotes: data.downvotes,
-                userVote: data.user_vote
-              }
-            : post
-        ));
-        
-        if (data.message === "Vote removed") {
-          toast.success("Vote removed");
-        } else {
-          toast.success(`${value === 1 ? "Upvoted" : "Downvoted"}`);
-        }
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === postId
+              ? {
+                  ...post,
+                  vote_score: data.score,
+                  upvotes: data.upvotes,
+                  downvotes: data.downvotes,
+                  userVote: data.user_vote
+                }
+              : post
+          )
+        );
+        toast.success(data.message || (value === 1 ? "Upvoted" : "Downvoted"));
       } else {
         const errorData = await res.json();
         toast.error(errorData.error || "Failed to vote");
@@ -128,10 +123,42 @@ const Posts = () => {
     }
   };
 
-  // Vote buttons component
+  const handleFlagPost = async (postId, isFlagged = true) => {
+    if (!user || !token) {
+      toast.error("You must be logged in to flag a post");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${VITE_API_URL}/api/posts/${postId}/flag`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_flagged: isFlagged })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success(data.message || (isFlagged ? "Post flagged" : "Post unflagged"));
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === postId ? { ...post, is_flagged: isFlagged } : post
+          )
+        );
+      } else {
+        toast.error(data.error || "Failed to flag post");
+      }
+    } catch (err) {
+      console.error("Flagging error:", err);
+      toast.error("Network error while flagging post");
+    }
+  };
+
   const VoteButtons = ({ post }) => (
     <div className="flex flex-col items-center space-y-1 mr-3">
-      {/* Upvote */}
       <button
         onClick={(e) => {
           e.preventDefault();
@@ -139,7 +166,7 @@ const Posts = () => {
           handleVote(post.id, 1);
         }}
         disabled={votesLoading[post.id] || !user}
-        className={`p-1.5 rounded transition-colors ${
+        className={`p-1.5 rounded ${
           post.userVote === 1
             ? "bg-green-100 text-green-700 border border-green-300"
             : "bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-600"
@@ -151,10 +178,9 @@ const Posts = () => {
         </svg>
       </button>
 
-      {/* Score Display */}
       <div className="text-center">
         <span className={`font-bold text-sm ${
-          (post.vote_score || 0) > 0 ? "text-green-600" : 
+          (post.vote_score || 0) > 0 ? "text-green-600" :
           (post.vote_score || 0) < 0 ? "text-red-600" : "text-gray-600"
         }`}>
           {post.vote_score || 0}
@@ -164,7 +190,6 @@ const Posts = () => {
         </div>
       </div>
 
-      {/* Downvote */}
       <button
         onClick={(e) => {
           e.preventDefault();
@@ -172,7 +197,7 @@ const Posts = () => {
           handleVote(post.id, -1);
         }}
         disabled={votesLoading[post.id] || !user}
-        className={`p-1.5 rounded transition-colors ${
+        className={`p-1.5 rounded ${
           post.userVote === -1
             ? "bg-red-100 text-red-700 border border-red-300"
             : "bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600"
@@ -184,7 +209,6 @@ const Posts = () => {
         </svg>
       </button>
 
-      {/* Loading indicator */}
       {votesLoading[post.id] && (
         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-900"></div>
       )}
@@ -210,10 +234,7 @@ const Posts = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-indigo-800">All Posts</h1>
         {user && (
-          <Link
-            to="/posts/new"
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
+          <Link to="/posts/new" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
             Create New Post
           </Link>
         )}
@@ -236,46 +257,35 @@ const Posts = () => {
         <div className="text-center py-12">
           <div className="text-gray-500 text-xl mb-4">No posts available</div>
           {user ? (
-            <Link
-              to="/posts/new"
-              className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-            >
+            <Link to="/posts/new" className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors">
               Create the first post!
             </Link>
           ) : (
             <p className="text-gray-600">
-              <Link to="/login" className="text-indigo-600 hover:underline">
-                Login
-              </Link>{" "}
-              to create posts
+              <Link to="/login" className="text-indigo-600 hover:underline">Login</Link> to create posts
             </p>
           )}
         </div>
       ) : (
         <div className="grid gap-4">
           {posts.map((post) => (
-            <div
-              key={post.id}
-              className="border rounded shadow hover:shadow-md transition bg-white"
-            >
+            <div key={post.id} className="border rounded shadow hover:shadow-md transition bg-white">
               <div className="p-4 flex space-x-3">
-                {/* Vote Section */}
                 <VoteButtons post={post} />
-
-                {/* Post Content */}
                 <div className="flex-1">
                   <Link to={`/posts/${post.id}`} className="block">
-                    <h2 className="text-xl font-semibold text-blue-700 hover:text-indigo-600 transition-colors">
+                    <h2 className="text-xl font-semibold text-blue-700 hover:text-indigo-600 transition-colors flex items-center">
                       {post.title}
+                      {post.is_flagged && (
+                        <span className="ml-2 text-xs text-yellow-700 font-semibold bg-yellow-100 px-2 py-0.5 rounded-full">
+                          ⚠️ Flagged
+                        </span>
+                      )}
                     </h2>
                     <p className="text-gray-600 mt-1 mb-3">
-                      {post.content?.length > 120
-                        ? `${post.content.slice(0, 120)}...`
-                        : post.content}
+                      {post.content?.length > 120 ? `${post.content.slice(0, 120)}...` : post.content}
                     </p>
                   </Link>
-
-                  {/* Post Meta & Actions */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <span>By User #{post.user_id}</span>
@@ -286,34 +296,16 @@ const Posts = () => {
                         </span>
                       )}
                     </div>
-                    
-                    {/* Like Button & User Actions */}
+
                     <div className="flex items-center space-x-3">
-                      <LikeButton 
-                        type="post" 
-                        id={post.id}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                      />
-                      
-                      {/* User Actions */}
+                      <LikeButton type="post" id={post.id} />
                       {user?.id === post.user_id && (
                         <div className="flex items-center space-x-2">
-                          <Link
-                            to={`/posts/${post.id}/edit`}
-                            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Edit
-                          </Link>
+                          <Link to={`/posts/${post.id}/edit`} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">Edit</Link>
                           <button
                             onClick={(e) => {
                               e.preventDefault();
-                              e.stopPropagation();
                               if (window.confirm("Delete this post?")) {
-                                // Add delete functionality
                                 console.log("Delete post", post.id);
                               }
                             }}
@@ -323,29 +315,23 @@ const Posts = () => {
                           </button>
                         </div>
                       )}
-
-                      {/* Admin Actions */}
                       {user?.is_admin && user?.id !== post.user_id && (
                         <div className="flex items-center space-x-2">
-                          <span className="text-xs text-red-600 font-medium">🛡️</span>
-                          <Link
-                            to={`/posts/${post.id}/edit`}
-                            className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Edit
-                          </Link>
                           <button
                             onClick={(e) => {
                               e.preventDefault();
-                              e.stopPropagation();
-                              if (window.confirm("Admin delete this post?")) {
-                                console.log("Admin delete post", post.id);
-                              }
+                              const confirm = window.confirm(
+                                post.is_flagged ? "Unflag this post?" : "Flag this post as inappropriate?"
+                              );
+                              if (confirm) handleFlagPost(post.id, !post.is_flagged);
                             }}
-                            className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                            className={`text-xs px-2 py-1 rounded ${
+                              post.is_flagged
+                                ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                                : "bg-gray-100 text-gray-700 hover:bg-yellow-50"
+                            }`}
                           >
-                            Delete
+                            {post.is_flagged ? "Unflag" : "Flag"}
                           </button>
                         </div>
                       )}
