@@ -123,45 +123,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // 🔧 FIXED: Add a debug function to test endpoints
-  const debugFlagEndpoints = async () => {
-    if (!token || !user?.is_admin) {
-      console.log("Not authenticated or not admin");
-      return;
-    }
-
-    try {
-      console.log("Testing admin debug endpoint...");
-      const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/debug/flag-test`);
-      const result = await handleApiResponse(response, "Debug test failed");
-      console.log("Debug test result:", result);
-      
-      // Test if we can reach flag endpoints
-      const endpoints = [
-        `${VITE_API_URL}/api/admin/posts/1/flag`,
-        `${VITE_API_URL}/api/admin/comments/1/flag`
-      ];
-      
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Testing endpoint: ${endpoint}`);
-          const testResponse = await fetch(endpoint, {
-            method: 'OPTIONS', // Use OPTIONS to test if endpoint exists
-            headers: {
-              "Authorization": `Bearer ${token}`,
-            }
-          });
-          console.log(`${endpoint} - Status: ${testResponse.status}`);
-        } catch (error) {
-          console.error(`Error testing ${endpoint}:`, error);
-        }
-      }
-      
-    } catch (error) {
-      console.error("Debug test failed:", error);
-    }
-  };
-
   // Updated content action buttons with better error handling
   const renderContentActions = (item, type) => (
     <div className="flex gap-2 ml-4">
@@ -366,29 +327,24 @@ const AdminDashboard = () => {
     try {
       let postsData = [];
       try {
-        const adminPostsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/posts`);
-        if (adminPostsRes.ok) {
-          const data = await handleApiResponse(adminPostsRes, "Failed to fetch admin posts");
-          postsData = Array.isArray(data) ? data : (data.posts || []);
-        } else {
-          const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
-          const data = await handleApiResponse(postsRes, "Failed to fetch posts");
-          postsData = Array.isArray(data) ? data : (data.posts || []);
-        }
+        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
+        const data = await handleApiResponse(postsRes, "Failed to fetch posts");
+        postsData = Array.isArray(data) ? data : (data.posts || []);
       } catch (err) {
         toast.error(`Failed to load posts: ${err.message}`);
       }
 
       let commentsData = [];
       try {
-        const adminCommentsEndpoints = [
-          `${VITE_API_URL}/api/admin/comments`,
-          `${VITE_API_URL}/api/admin/all-comments`,
-          `${VITE_API_URL}/api/comments/all`
+        // Try different comment endpoints without admin prefix first
+        const commentsEndpoints = [
+          `${VITE_API_URL}/api/comments/all`,
+          `${VITE_API_URL}/api/comments?all=true`,
+          `${VITE_API_URL}/api/comments?limit=100`
         ];
 
         let commentsFound = false;
-        for (const endpoint of adminCommentsEndpoints) {
+        for (const endpoint of commentsEndpoints) {
           try {
             const res = await makeAuthenticatedRequest(endpoint);
             if (res.ok) {
@@ -424,27 +380,6 @@ const AdminDashboard = () => {
           commentsData = allComments;
         }
 
-        if (!commentsFound && commentsData.length === 0) {
-          const queryEndpoints = [
-            `${VITE_API_URL}/api/comments?all=true`,
-            `${VITE_API_URL}/api/comments?admin=true`,
-            `${VITE_API_URL}/api/comments?limit=100`
-          ];
-
-          for (const endpoint of queryEndpoints) {
-            try {
-              const res = await makeAuthenticatedRequest(endpoint);
-              if (res.ok) {
-                const data = await handleApiResponse(res, "Failed to fetch comments");
-                commentsData = Array.isArray(data) ? data : (data.comments || []);
-                break;
-              }
-            } catch (err) {
-              continue;
-            }
-          }
-        }
-
       } catch (err) {
         toast.error(`Failed to load comments: ${err.message}`);
       }
@@ -470,24 +405,27 @@ const AdminDashboard = () => {
       let flaggedPostsData = [];
       let flaggedCommentsData = [];
 
+      // Try to fetch flagged content using standard endpoints
       try {
-        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
+        const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts?flagged=true`);
         if (postsRes.ok) {
           const data = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
           flaggedPostsData = Array.isArray(data) ? data : (data.posts || []);
         }
       } catch (err) {
-        // Endpoint not available
+        // Endpoint not available, try alternative
+        console.log("Flagged posts endpoint not available");
       }
 
       try {
-        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/comments`);
+        const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/comments?flagged=true`);
         if (commentsRes.ok) {
           const data = await handleApiResponse(commentsRes, "Failed to fetch flagged comments");
           flaggedCommentsData = Array.isArray(data) ? data : (data.comments || []);
         }
       } catch (err) {
         // Endpoint not available
+        console.log("Flagged comments endpoint not available");
       }
 
       setFlaggedPosts(flaggedPostsData);
@@ -546,7 +484,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // 🔧 FIXED: Fixed handleContentAction function in AdminDashboard.jsx
+  // 🔧 FIXED: Fixed handleContentAction function - reverted to original endpoints
   const handleContentAction = async (type, id, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -555,23 +493,22 @@ const AdminDashboard = () => {
       let method = "PATCH";
       let body = null;
 
-      // 🔧 FIXED: Updated endpoint paths and added better error handling
+      // Using original endpoint structure
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":
-          // 🔧 FIXED: Use correct endpoint path and send empty JSON body
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
           body = JSON.stringify({}); // Send empty JSON object to ensure proper content-type
           break;
         case "unflag":
-          endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/flag`;
           body = JSON.stringify({ is_flagged: false });
           break;
         case "delete":
@@ -712,13 +649,6 @@ const AdminDashboard = () => {
               className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               🔄 Refresh Data
-            </button>
-            <button
-              onClick={debugFlagEndpoints}
-              disabled={loading}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              🔧 Debug Endpoints
             </button>
           </div>
 
