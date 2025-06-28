@@ -18,7 +18,6 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-// Fixed API URL to match your deployed backend
 const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const AdminDashboard = () => {
@@ -54,7 +53,6 @@ const AdminDashboard = () => {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
-  // Enhanced API response handler
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
       let errorText = errorMessage;
@@ -62,7 +60,6 @@ const AdminDashboard = () => {
         const errorData = await response.json();
         errorText = errorData.error || errorData.message || errorMessage;
       } catch {
-        // If JSON parsing fails, use status-based messages
         if (response.status === 404) {
           errorText = `Endpoint not found: ${response.url}`;
         } else if (response.status === 403) {
@@ -84,7 +81,6 @@ const AdminDashboard = () => {
     return response.json();
   };
 
-  // Enhanced authenticated fetch function
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
       const response = await fetch(url, {
@@ -98,7 +94,6 @@ const AdminDashboard = () => {
       });
       return response;
     } catch (error) {
-      console.error("Network error:", error);
       throw new Error("Network error. Please check your connection.");
     }
   };
@@ -142,16 +137,11 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      // Updated to use /api/admin/stats endpoint
-      console.log("Fetching admin stats from:", `${VITE_API_URL}/api/admin/stats`);
-      
       const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       
-      console.log("Stats data received:", statsData);
       setStats(statsData);
 
-      // Try to fetch activity trends from admin endpoints
       try {
         const trendsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/activity-trends`);
         
@@ -177,7 +167,6 @@ const AdminDashboard = () => {
             ]
           });
         } else {
-          // Fallback chart data
           setChartData({
             labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             datasets: [
@@ -199,8 +188,6 @@ const AdminDashboard = () => {
           });
         }
       } catch (trendsError) {
-        console.log("Activity trends not available, using fallback data");
-        // Set fallback chart data
         setChartData({
           labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
           datasets: [
@@ -225,7 +212,6 @@ const AdminDashboard = () => {
       toast.success("Dashboard data loaded successfully");
 
     } catch (err) {
-      console.error("Dashboard data fetch error:", err);
       toast.error(`Failed to load dashboard data: ${err.message}`);
     } finally {
       setLoading(false);
@@ -240,12 +226,10 @@ const AdminDashboard = () => {
       const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/users`);
       const data = await handleApiResponse(response, "Failed to fetch users");
       
-      // Handle both array and object responses
       const usersArray = Array.isArray(data) ? data : (data.users || []);
       setUsers(usersArray);
       
     } catch (err) {
-      console.error("Users fetch error:", err);
       toast.error(`Failed to load users: ${err.message}`);
     } finally {
       setLoading(false);
@@ -265,7 +249,6 @@ const AdminDashboard = () => {
         const data = await handleApiResponse(response, "User search failed");
         setUserSearchResults(Array.isArray(data) ? data : (data.users || []));
       } else {
-        // Fallback to client-side search
         const filtered = users.filter(u => 
           u.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
           u.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
@@ -273,8 +256,6 @@ const AdminDashboard = () => {
         setUserSearchResults(filtered);
       }
     } catch (err) {
-      console.error("User search error:", err);
-      // Fallback to client-side search
       const filtered = users.filter(u => 
         u.username?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
         u.email?.toLowerCase().includes(userSearchTerm.toLowerCase())
@@ -290,21 +271,98 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      const [postsRes, commentsRes] = await Promise.all([
-        makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`),
-        makeAuthenticatedRequest(`${VITE_API_URL}/api/comments`)
-      ]);
+      let postsData = [];
+      try {
+        const adminPostsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/posts`);
+        if (adminPostsRes.ok) {
+          const data = await handleApiResponse(adminPostsRes, "Failed to fetch admin posts");
+          postsData = Array.isArray(data) ? data : (data.posts || []);
+        } else {
+          const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
+          const data = await handleApiResponse(postsRes, "Failed to fetch posts");
+          postsData = Array.isArray(data) ? data : (data.posts || []);
+        }
+      } catch (err) {
+        toast.error(`Failed to load posts: ${err.message}`);
+      }
 
-      const [postsData, commentsData] = await Promise.all([
-        handleApiResponse(postsRes, "Failed to fetch posts"),
-        handleApiResponse(commentsRes, "Failed to fetch comments")
-      ]);
+      let commentsData = [];
+      try {
+        const adminCommentsEndpoints = [
+          `${VITE_API_URL}/api/admin/comments`,
+          `${VITE_API_URL}/api/admin/all-comments`,
+          `${VITE_API_URL}/api/comments/all`
+        ];
 
-      setAllPosts(Array.isArray(postsData) ? postsData : (postsData.posts || []));
-      setAllComments(Array.isArray(commentsData) ? commentsData : (commentsData.comments || []));
+        let commentsFound = false;
+        for (const endpoint of adminCommentsEndpoints) {
+          try {
+            const res = await makeAuthenticatedRequest(endpoint);
+            if (res.ok) {
+              const data = await handleApiResponse(res, "Failed to fetch comments");
+              commentsData = Array.isArray(data) ? data : (data.comments || []);
+              commentsFound = true;
+              break;
+            }
+          } catch (err) {
+            continue;
+          }
+        }
+
+        if (!commentsFound && postsData.length > 0) {
+          const allComments = [];
+          const postsToCheck = postsData.slice(0, 20);
+          
+          for (const post of postsToCheck) {
+            try {
+              const postCommentsRes = await makeAuthenticatedRequest(
+                `${VITE_API_URL}/api/posts/${post.id}/comments`
+              );
+              if (postCommentsRes.ok) {
+                const postComments = await handleApiResponse(postCommentsRes, "Failed to fetch post comments");
+                const comments = Array.isArray(postComments) ? postComments : (postComments.comments || []);
+                allComments.push(...comments);
+              }
+            } catch (err) {
+              continue;
+            }
+          }
+          
+          commentsData = allComments;
+        }
+
+        if (!commentsFound && commentsData.length === 0) {
+          const queryEndpoints = [
+            `${VITE_API_URL}/api/comments?all=true`,
+            `${VITE_API_URL}/api/comments?admin=true`,
+            `${VITE_API_URL}/api/comments?limit=100`
+          ];
+
+          for (const endpoint of queryEndpoints) {
+            try {
+              const res = await makeAuthenticatedRequest(endpoint);
+              if (res.ok) {
+                const data = await handleApiResponse(res, "Failed to fetch comments");
+                commentsData = Array.isArray(data) ? data : (data.comments || []);
+                break;
+              }
+            } catch (err) {
+              continue;
+            }
+          }
+        }
+
+      } catch (err) {
+        toast.error(`Failed to load comments: ${err.message}`);
+      }
+
+      setAllPosts(postsData);
+      setAllComments(commentsData);
+
+      const message = `Loaded ${postsData.length} posts and ${commentsData.length} comments`;
+      toast.success(message);
       
     } catch (err) {
-      console.error("Content fetch error:", err);
       toast.error(`Failed to load content: ${err.message}`);
     } finally {
       setLoading(false);
@@ -319,7 +377,6 @@ const AdminDashboard = () => {
       let flaggedPostsData = [];
       let flaggedCommentsData = [];
 
-      // Try to fetch flagged posts
       try {
         const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
         if (postsRes.ok) {
@@ -327,10 +384,9 @@ const AdminDashboard = () => {
           flaggedPostsData = Array.isArray(data) ? data : (data.posts || []);
         }
       } catch (err) {
-        console.log("Flagged posts endpoint not available");
+        // Endpoint not available
       }
 
-      // Try to fetch flagged comments
       try {
         const commentsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/comments`);
         if (commentsRes.ok) {
@@ -338,14 +394,13 @@ const AdminDashboard = () => {
           flaggedCommentsData = Array.isArray(data) ? data : (data.comments || []);
         }
       } catch (err) {
-        console.log("Flagged comments endpoint not available");
+        // Endpoint not available
       }
 
       setFlaggedPosts(flaggedPostsData);
       setFlaggedComments(flaggedCommentsData);
       
     } catch (err) {
-      console.error("Flagged content fetch error:", err);
       toast.error(`Failed to load flagged content: ${err.message}`);
     } finally {
       setLoading(false);
@@ -390,12 +445,10 @@ const AdminDashboard = () => {
       await handleApiResponse(response, `Failed to ${action} user`);
       toast.success(`User ${action} successful`);
       
-      // Refresh data
       await fetchAllUsers();
       await fetchOverviewData();
       
     } catch (err) {
-      console.error(`User ${action} error:`, err);
       toast.error(err.message);
     }
   };
@@ -437,18 +490,15 @@ const AdminDashboard = () => {
       await handleApiResponse(response, `Failed to ${action} ${type}`);
       toast.success(`${type} ${action} successful`);
       
-      // Refresh data
       await fetchFlaggedContent();
       await fetchAllContent();
       await fetchOverviewData();
       
     } catch (err) {
-      console.error(`Content ${action} error:`, err);
       toast.error(err.message);
     }
   };
 
-  // Filter functions with null checks
   const filteredUsers = userSearchTerm.trim() 
     ? userSearchResults 
     : users.filter(u => 
@@ -465,7 +515,6 @@ const AdminDashboard = () => {
     c?.content?.toLowerCase().includes(contentSearchTerm.toLowerCase())
   );
 
-  // Loading state
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -477,7 +526,6 @@ const AdminDashboard = () => {
     );
   }
 
-  // Access denied state
   if (!user?.is_admin) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -493,17 +541,11 @@ const AdminDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-2">🛡️ Admin Dashboard</h1>
         <p className="text-gray-600">Manage users, content, and monitor platform activity</p>
-        {/* Debug info */}
-        <div className="text-xs text-gray-400 mt-2">
-          API: {VITE_API_URL} | User: {user.username} | Admin: {user.is_admin ? "Yes" : "No"}
-        </div>
       </div>
 
-      {/* Navigation Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
           {[
@@ -527,7 +569,6 @@ const AdminDashboard = () => {
         </nav>
       </div>
 
-      {/* Loading indicator */}
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -535,10 +576,8 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Overview Tab */}
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {/* Quick Actions */}
           <div className="flex flex-wrap gap-4">
             <button
               onClick={() => setShowUserForm(true)}
@@ -562,7 +601,6 @@ const AdminDashboard = () => {
             </button>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
@@ -605,7 +643,6 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* Activity Chart */}
           {chartData && (
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
               <h3 className="text-lg font-semibold mb-4">📊 Weekly Activity Trends</h3>
@@ -640,7 +677,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Users Tab */}
       {activeTab === "users" && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -654,7 +690,6 @@ const AdminDashboard = () => {
             </button>
           </div>
 
-          {/* User Search */}
           <div className="relative">
             <input
               type="text"
@@ -670,7 +705,6 @@ const AdminDashboard = () => {
             )}
           </div>
 
-          {/* Users List */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-3 bg-gray-50 border-b">
               <h4 className="font-medium text-gray-900">
@@ -729,7 +763,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Content Tab */}
       {activeTab === "content" && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -743,7 +776,6 @@ const AdminDashboard = () => {
             </button>
           </div>
 
-          {/* Content Search */}
           <div className="relative">
             <input
               type="text"
@@ -754,7 +786,6 @@ const AdminDashboard = () => {
             />
           </div>
 
-          {/* Posts Section */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-3 bg-gray-50 border-b">
               <h4 className="font-medium text-gray-900">
@@ -800,7 +831,6 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* Comments Section */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-3 bg-gray-50 border-b">
               <h4 className="font-medium text-gray-900">
@@ -847,7 +877,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Flagged Tab */}
       {activeTab === "flagged" && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -861,7 +890,6 @@ const AdminDashboard = () => {
             </button>
           </div>
 
-          {/* Flagged Posts */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-3 bg-red-50 border-b border-red-200">
               <h4 className="font-medium text-red-900">
@@ -907,7 +935,6 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* Flagged Comments */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-3 bg-red-50 border-b border-red-200">
               <h4 className="font-medium text-red-900">
@@ -952,7 +979,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Modals */}
       {showUserForm && (
         <Modal title="Create New User" onClose={() => setShowUserForm(false)}>
           <CreateUserForm 
@@ -975,28 +1001,6 @@ const AdminDashboard = () => {
             }} 
           />
         </Modal>
-      )}
-
-      {/* Debug Panel (Development Only) */}
-      {import.meta.env.DEV && (
-        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
-          <h4 className="font-bold mb-2">🔍 Debug Info</h4>
-          <div className="space-y-1">
-            <div>API: {VITE_API_URL}</div>
-            <div>User: {user?.username}</div>
-            <div>Admin: {user?.is_admin ? "✅" : "❌"}</div>
-            <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
-            <div>Active Tab: {activeTab}</div>
-            <div>Loading: {loading ? "🔄" : "✅"}</div>
-            <div>Stats: U:{stats.users} P:{stats.posts} C:{stats.comments}</div>
-          </div>
-          <button
-            onClick={() => console.log({ user, token, stats, VITE_API_URL })}
-            className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-          >
-            Log Debug Data
-          </button>
-        </div>
       )}
     </div>
   );
