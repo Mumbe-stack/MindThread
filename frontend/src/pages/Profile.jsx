@@ -11,6 +11,53 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
   const [previewUrl, setPreviewUrl] = useState(currentAvatar);
   const { token } = useAuth();
 
+  // Enhanced API response handler (same as AdminDashboard)
+  const handleApiResponse = async (response, errorMessage = "API request failed") => {
+    if (!response.ok) {
+      let errorText = errorMessage;
+      try {
+        const errorData = await response.json();
+        errorText = errorData.error || errorData.message || errorMessage;
+      } catch {
+        if (response.status === 404) {
+          errorText = `Endpoint not found: ${response.url}`;
+        } else if (response.status === 403) {
+          errorText = "Access denied";
+        } else if (response.status === 401) {
+          errorText = "Authentication required";
+        } else {
+          errorText = `${errorMessage} (${response.status})`;
+        }
+      }
+      throw new Error(errorText);
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Server returned non-JSON response");
+    }
+
+    return response.json();
+  };
+
+  // Enhanced authenticated fetch (same as AdminDashboard)
+  const makeAuthenticatedRequest = async (url, options = {}) => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+      return response;
+    } catch (error) {
+      console.error("Network error:", error);
+      throw new Error("Network error. Please check your connection.");
+    }
+  };
+
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -37,23 +84,42 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
       const formData = new FormData();
       formData.append('avatar', file);
 
-      const response = await fetch(`${API_URL}/api/users/avatar`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      // Try multiple possible endpoints
+      const endpoints = [
+        `${API_URL}/api/users/avatar`,
+        `${API_URL}/api/users/upload-avatar`,
+        `${API_URL}/api/upload/avatar`
+      ];
 
-      if (response.ok) {
-        toast.success('Avatar updated successfully!');
-        onUploadSuccess && onUploadSuccess();
-      } else {
-        toast.error('Failed to upload avatar');
+      let success = false;
+      for (const endpoint of endpoints) {
+        try {
+          const response = await makeAuthenticatedRequest(endpoint, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (response.ok) {
+            await handleApiResponse(response, "Failed to upload avatar");
+            toast.success('Avatar updated successfully!');
+            onUploadSuccess && onUploadSuccess();
+            success = true;
+            break;
+          }
+        } catch (error) {
+          console.log(`Endpoint ${endpoint} failed:`, error.message);
+          continue;
+        }
+      }
+
+      if (!success) {
+        toast.error('Failed to upload avatar - all endpoints failed');
         setPreviewUrl(currentAvatar);
       }
+
     } catch (error) {
-      toast.error('Network error uploading avatar');
+      console.error("Avatar upload error:", error);
+      toast.error(`Upload failed: ${error.message}`);
       setPreviewUrl(currentAvatar);
     } finally {
       setIsUploading(false);
@@ -119,11 +185,60 @@ const Profile = () => {
   const [fullUserData, setFullUserData] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Enhanced API response handler (same as AdminDashboard)
+  const handleApiResponse = async (response, errorMessage = "API request failed") => {
+    if (!response.ok) {
+      let errorText = errorMessage;
+      try {
+        const errorData = await response.json();
+        errorText = errorData.error || errorData.message || errorMessage;
+      } catch {
+        if (response.status === 404) {
+          errorText = `Endpoint not found: ${response.url}`;
+        } else if (response.status === 403) {
+          errorText = "Access denied";
+        } else if (response.status === 401) {
+          errorText = "Authentication required";
+        } else {
+          errorText = `${errorMessage} (${response.status})`;
+        }
+      }
+      throw new Error(errorText);
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Server returned non-JSON response");
+    }
+
+    return response.json();
+  };
+
+  // Enhanced authenticated fetch (same as AdminDashboard)
+  const makeAuthenticatedRequest = async (url, options = {}) => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+      return response;
+    } catch (error) {
+      console.error("Network error:", error);
+      throw new Error("Network error. Please check your connection.");
+    }
+  };
+
   useEffect(() => {
-    if (!loading && !token) {
+    // Only redirect if user is definitively not authenticated and not loading
+    if (!loading && !token && !user) {
       navigate("/login");
     }
-  }, [token, loading, navigate]);
+  }, [token, loading, user, navigate]);
 
   useEffect(() => {
     if (user && token) {
@@ -137,46 +252,44 @@ const Profile = () => {
     try {
       setIsLoadingStats(true);
       
-      const response = await fetch(`${API_URL}/api/users/me`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setFullUserData(userData);
-        
-        if (userData.stats) {
-          setUserStats({
-            posts: userData.stats.posts_count || userData.stats.post_count || 0,
-            comments: userData.stats.comments_count || userData.stats.comment_count || 0,
-            votes: userData.stats.votes_count || userData.stats.vote_count || 0, 
-          });
-        } else {
-          setUserStats({
-            posts: userData.post_count || userData.posts_count || userData.total_posts || 0,
-            comments: userData.comment_count || userData.comments_count || userData.total_comments || 0,
-            votes: userData.vote_count || userData.votes_count || userData.total_votes || 0, 
-          });
-        }
+      // Use the same pattern as AdminDashboard
+      console.log("Fetching user profile from:", `${API_URL}/api/users/me`);
+      
+      const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me`);
+      const userData = await handleApiResponse(response, "Failed to load profile data");
+      
+      console.log("User data received:", userData);
+      setFullUserData(userData);
+      
+      // Parse stats with same flexibility as AdminDashboard
+      if (userData.stats) {
+        setUserStats({
+          posts: userData.stats.posts_count || userData.stats.post_count || userData.stats.posts || 0,
+          comments: userData.stats.comments_count || userData.stats.comment_count || userData.stats.comments || 0,
+          votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0, 
+        });
       } else {
-        if (response.status === 401) {
-          toast.error("Authentication expired. Please log in again.");
-          navigate("/login");
-        } else if (response.status === 404) {
-          toast.error("Profile not found");
-        } else {
-          toast.error(`Failed to load profile data`);
-        }
-        setUserStats({ posts: 0, comments: 0, votes: 0 });
+        setUserStats({
+          posts: userData.post_count || userData.posts_count || userData.total_posts || userData.posts || 0,
+          comments: userData.comment_count || userData.comments_count || userData.total_comments || userData.comments || 0,
+          votes: userData.vote_count || userData.votes_count || userData.total_votes || userData.votes || 0, 
+        });
       }
+
+      toast.success("Profile data loaded successfully");
+
     } catch (error) {
-      toast.error("Network error loading profile");
+      console.error("Profile data fetch error:", error);
+      
+      if (error.message.includes("401") || error.message.includes("Authentication")) {
+        toast.error("Authentication expired. Please log in again.");
+        navigate("/login");
+      } else if (error.message.includes("404")) {
+        toast.error("Profile not found");
+      } else {
+        toast.error(`Failed to load profile: ${error.message}`);
+      }
+      
       setUserStats({ posts: 0, comments: 0, votes: 0 });
     } finally {
       setIsLoadingStats(false);
@@ -247,11 +360,27 @@ This will permanently delete:
     );
   }
 
-  if (!user) {
+  // Don't show "redirecting" message unless we're actually redirecting
+  if (!user && !loading && !token) {
     return (
       <div className="max-w-4xl mx-auto p-6 text-center">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if user is not yet available but we have a token
+  if (!user && token) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg mt-10">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded mb-6"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="h-4 bg-gray-200 rounded"></div>
+            <div className="h-4 bg-gray-200 rounded"></div>
+          </div>
         </div>
       </div>
     );
@@ -537,6 +666,26 @@ This will permanently delete:
           )}
         </button>
       </div>
+
+      {/* Debug Panel (Development Only) */}
+      {import.meta.env.DEV && (
+        <div className="fixed bottom-4 left-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
+          <h4 className="font-bold mb-2">🔍 Profile Debug</h4>
+          <div className="space-y-1">
+            <div>API: {API_URL}</div>
+            <div>User: {user?.username}</div>
+            <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
+            <div>Loading: {loading ? "🔄" : "✅"}</div>
+            <div>Stats: P:{userStats.posts} C:{userStats.comments} V:{userStats.votes}</div>
+          </div>
+          <button
+            onClick={() => console.log({ user, token, userStats, fullUserData, API_URL })}
+            className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+          >
+            Log Debug Data
+          </button>
+        </div>
+      )}
     </div>
   );
 };
