@@ -251,46 +251,83 @@ def fetch_current_user():
             "updated_at": user.updated_at.isoformat() if hasattr(user, 'updated_at') and user.updated_at else None
         }
 
-        # Add statistics and recent content
+        # Add statistics and recent content - FIXED CALCULATION
         try:
+            # Calculate statistics using direct database queries for accuracy
+            from models import Post, Comment, Vote
+            
+            # Count posts (all posts by user, or only approved if you prefer)
+            posts_count = Post.query.filter_by(user_id=user.id).count()
+            
+            # Count comments (all comments by user, or only approved if you prefer) 
+            comments_count = Comment.query.filter_by(user_id=user.id).count()
+            
+            # Count votes by user
+            votes_count = Vote.query.filter_by(user_id=user.id).count()
+
             user_data["stats"] = {
-                "posts_count": user.posts.count() if hasattr(user, 'posts') else 0,
-                "comments_count": user.comments.count() if hasattr(user, 'comments') else 0,
-                "votes_count": user.votes.count() if hasattr(user, 'votes') else 0
+                "posts_count": posts_count,
+                "comments_count": comments_count,
+                "votes_count": votes_count
             }
 
-            if hasattr(user, 'posts'):
-                user_data["recent_posts"] = [
-                    {
-                        "id": p.id,
-                        "title": p.title,
-                        "created_at": p.created_at.isoformat() if p.created_at else None
-                    } for p in user.posts.order_by(Post.created_at.desc()).limit(5).all()
-                ]
+            # Also add as direct properties for compatibility
+            user_data["post_count"] = posts_count
+            user_data["comment_count"] = comments_count  
+            user_data["vote_count"] = votes_count
 
-            if hasattr(user, 'comments'):
-                user_data["recent_comments"] = [
-                    {
-                        "id": c.id,
-                        "content": c.content[:100] + "..." if len(c.content) > 100 else c.content,
-                        "created_at": c.created_at.isoformat() if c.created_at else None
-                    } for c in user.comments.order_by(Comment.created_at.desc()).limit(5).all()
-                ]
+            # Get recent posts (limit 5, ordered by creation date)
+            recent_posts = Post.query.filter_by(user_id=user.id)\
+                                   .order_by(Post.created_at.desc())\
+                                   .limit(5).all()
+            
+            user_data["recent_posts"] = [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "is_approved": getattr(p, 'is_approved', True),
+                    "created_at": p.created_at.isoformat() if p.created_at else None
+                } for p in recent_posts
+            ]
+
+            # Get recent comments (limit 5, ordered by creation date)
+            recent_comments = Comment.query.filter_by(user_id=user.id)\
+                                         .order_by(Comment.created_at.desc())\
+                                         .limit(5).all()
+            
+            user_data["recent_comments"] = [
+                {
+                    "id": c.id,
+                    "content": c.content[:100] + "..." if len(c.content) > 100 else c.content,
+                    "post_id": c.post_id,
+                    "is_approved": getattr(c, 'is_approved', True),
+                    "created_at": c.created_at.isoformat() if c.created_at else None
+                } for c in recent_comments
+            ]
+
+            current_app.logger.info(f"User {user.id} stats calculated: Posts={posts_count}, Comments={comments_count}, Votes={votes_count}")
+
         except Exception as e:
-            current_app.logger.warning(f"Error adding user stats: {e}")
+            current_app.logger.error(f"Error calculating user stats for user {user.id}: {e}")
             # Set default stats if there's an error
             user_data["stats"] = {
                 "posts_count": 0,
                 "comments_count": 0,
                 "votes_count": 0
             }
+            user_data["post_count"] = 0
+            user_data["comment_count"] = 0
+            user_data["vote_count"] = 0
+            user_data["recent_posts"] = []
+            user_data["recent_comments"] = []
 
         return jsonify(user_data), 200
 
     except Exception as e:
         current_app.logger.error(f"Failed to fetch current user: {e}")
         return jsonify({"error": "Failed to fetch user data"}), 500
-
+    
+    
 @user_bp.route("/users/me", methods=["PATCH"])
 @jwt_required()
 @block_check_required

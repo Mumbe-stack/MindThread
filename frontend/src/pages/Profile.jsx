@@ -141,23 +141,28 @@ const Profile = () => {
       
       setFullUserData(userData);
       
-      // Extract stats from the response - try multiple possible structures
+      // Enhanced stats extraction with multiple fallback methods
       let posts = 0, comments = 0, votes = 0;
       
+      // Method 1: Check nested stats object (preferred format)
       if (userData.stats) {
         posts = userData.stats.posts_count || userData.stats.post_count || 0;
         comments = userData.stats.comments_count || userData.stats.comment_count || 0;
         votes = userData.stats.votes_count || userData.stats.vote_count || 0;
-      } else {
-        // Fallback to direct properties
+        console.log("Stats from nested object:", { posts, comments, votes });
+      }
+      
+      // Method 2: Fallback to direct properties
+      if (posts === 0 && comments === 0 && votes === 0) {
         posts = userData.post_count || userData.posts_count || 0;
         comments = userData.comment_count || userData.comments_count || 0;
         votes = userData.vote_count || userData.votes_count || 0;
+        console.log("Stats from direct properties:", { posts, comments, votes });
       }
 
       setUserStats({ posts, comments, votes });
       
-      console.log("Stats extracted:", { posts, comments, votes });
+      console.log("Final stats set:", { posts, comments, votes });
 
     } catch (error) {
       console.error("Profile data fetch error:", error);
@@ -189,7 +194,6 @@ This will permanently delete:
 
     const finalConfirm = prompt("Type 'DELETE' to confirm account deletion:");
     if (finalConfirm !== "DELETE") {
-      toast.error("Account deletion cancelled - confirmation text didn't match");
       return;
     }
 
@@ -197,10 +201,9 @@ This will permanently delete:
 
     try {
       await deleteUser();
-      toast.success("Account deleted successfully");
       navigate("/login");
     } catch (error) {
-      toast.error("Failed to delete account. Please try again.");
+      console.error("Failed to delete account:", error);
     } finally {
       setIsDeleting(false);
     }
@@ -214,7 +217,6 @@ This will permanently delete:
     setIsRefreshing(true);
     await fetchFullUserProfile();
     setIsRefreshing(false);
-    toast.success("Profile refreshed");
   };
 
   if (loading) {
@@ -351,13 +353,14 @@ This will permanently delete:
           <div className="space-y-1">
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
             <p className="text-lg text-gray-900">
-              {user.created_at ? (() => {
-                const date = new Date(user.created_at);
-                const day = date.getDate();
-                const month = date.getMonth() + 1; // getMonth() returns 0-11
+              {(() => {
+                const rawDate = user.created_at || new Date().toISOString();
+                const date = new Date(rawDate);
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = date.getFullYear();
                 return `${day}/${month}/${year}`;
-              })() : 'Recently joined'}
+                })()}
             </p>
             <p className="text-sm text-gray-500">
               {user.created_at ? `${Math.floor((new Date() - new Date(user.created_at)) / (1000 * 60 * 60 * 24))} days ago` : ''}
@@ -550,27 +553,6 @@ This will permanently delete:
           )}
         </button>
       </div>
-
-      {/* Debug Panel (Development Only) */}
-      {import.meta.env.DEV && (
-        <div className="fixed bottom-4 left-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
-          <h4 className="font-bold mb-2">🔍 Profile Debug</h4>
-          <div className="space-y-1">
-            <div>API: {API_URL}</div>
-            <div>User: {user?.username}</div>
-            <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
-            <div>Loading: {loading ? "🔄" : "✅"}</div>
-            <div>Stats: P:{userStats.posts} C:{userStats.comments} V:{userStats.votes}</div>
-            <div>Avatar: {avatarUrl ? "✅" : "❌"}</div>
-          </div>
-          <button
-            onClick={() => console.log({ user, token, userStats, fullUserData, avatarUrl, API_URL })}
-            className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-          >
-            Log Debug Data
-          </button>
-        </div>
-      )}
     </div>
   );
 };
