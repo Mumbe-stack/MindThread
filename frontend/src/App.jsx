@@ -7,6 +7,7 @@ import Posts from "./pages/Posts";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
+import EditProfile from "./pages/EditProfile";
 import Users from "./pages/Users";
 import AddPost from "./pages/AddPost";
 import EditPost from "./pages/EditPost";
@@ -33,12 +34,12 @@ function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
           <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/profile/edit" element={user ? <EditProfile /> : <Navigate to="/login" />} />
           <Route path="/users" element={isAdmin ? <Users /> : <Navigate to="/" />} />
           <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/" />} />
           <Route path="/posts/new" element={user ? <AddPost /> : <Navigate to="/login" />} />
           <Route path="/posts/:id" element={<SinglePost />} />
           <Route path="/posts/:id/edit" element={user ? <EditPost /> : <Navigate to="/login" />} />
-
          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -5,13 +5,11 @@ import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
-// Fixed Avatar Uploader Component
-const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
+// Avatar Uploader Component (for Quick Actions section)
+const AvatarUploader = ({ onUploadSuccess }) => {
   const [isUploading, setIsUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(currentAvatar);
   const { token } = useAuth();
 
-  // Enhanced API response handler
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
       let errorText = errorMessage;
@@ -40,14 +38,12 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
     return response.json();
   };
 
-  // Enhanced authenticated fetch - NO Content-Type for FormData
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
       const response = await fetch(url, {
         ...options,
         headers: {
           "Authorization": `Bearer ${token}`,
-          // DON'T set Content-Type for FormData - browser sets it automatically
           ...options.headers,
         },
         credentials: "include",
@@ -73,11 +69,6 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
       return;
     }
 
-    // Show preview immediately
-    const fileUrl = URL.createObjectURL(file);
-    setPreviewUrl(fileUrl);
-    
-    // Upload the file
     await uploadAvatar(file);
   };
 
@@ -90,11 +81,9 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
 
       console.log("Uploading avatar to:", `${API_URL}/api/users/me/avatar`);
 
-      // Use the CORRECT endpoint from user.py
       const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me/avatar`, {
         method: 'POST',
         body: formData,
-        // Don't set headers - let browser handle Content-Type for FormData
       });
 
       if (response.ok) {
@@ -103,14 +92,8 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
         
         toast.success('Avatar updated successfully!');
         
-        // Trigger profile refresh
         if (onUploadSuccess) {
           await onUploadSuccess();
-        }
-        
-        // Update preview with the new avatar URL if provided
-        if (result.avatar_url) {
-          setPreviewUrl(result.avatar_url);
         }
         
       } else {
@@ -122,69 +105,27 @@ const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
     } catch (error) {
       console.error("Avatar upload error:", error);
       toast.error(`Upload failed: ${error.message}`);
-      
-      // Revert preview on error
-      setPreviewUrl(currentAvatar);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Update preview when currentAvatar changes
-  useEffect(() => {
-    setPreviewUrl(currentAvatar);
-  }, [currentAvatar]);
-
   return (
-    <div className="flex items-center space-x-4">
-      <div className="relative">
-        <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg">
-          {previewUrl ? (
-            <img 
-              src={previewUrl} 
-              alt="Profile" 
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                console.log("Avatar image failed to load:", previewUrl);
-                setPreviewUrl(null);
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400">
-              <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-            </div>
-          )}
-        </div>
-        {isUploading && (
-          <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-          </div>
-        )}
+    <label className="block">
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        disabled={isUploading}
+        className="sr-only"
+      />
+      <div className="cursor-pointer inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
+        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        {isUploading ? 'Uploading...' : 'Update Avatar'}
       </div>
-      
-      <div className="flex-1">
-        <label className="block">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            disabled={isUploading}
-            className="sr-only"
-          />
-          <div className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {isUploading ? 'Uploading...' : 'Update Photo'}
-          </div>
-        </label>
-        <p className="text-xs text-gray-500 mt-1">
-          JPG, PNG or GIF. Max 5MB.
-        </p>
-      </div>
-    </div>
+    </label>
   );
 };
 
@@ -197,7 +138,6 @@ const Profile = () => {
   const [fullUserData, setFullUserData] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Enhanced API response handler (same as AdminDashboard)
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
       let errorText = errorMessage;
@@ -226,7 +166,6 @@ const Profile = () => {
     return response.json();
   };
 
-  // Enhanced authenticated fetch (same as AdminDashboard)
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
       const response = await fetch(url, {
@@ -246,7 +185,6 @@ const Profile = () => {
   };
 
   useEffect(() => {
-    // Only redirect if user is definitively not authenticated and not loading
     if (!loading && !token && !user) {
       navigate("/login");
     }
@@ -264,7 +202,6 @@ const Profile = () => {
     try {
       setIsLoadingStats(true);
       
-      // Use the same pattern as AdminDashboard
       console.log("Fetching user profile from:", `${API_URL}/api/users/me`);
       
       const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me`);
@@ -273,22 +210,27 @@ const Profile = () => {
       console.log("User data received:", userData);
       setFullUserData(userData);
       
-      // Parse stats with same flexibility as AdminDashboard
+      // Extract stats from the response - aligned with backend structure
       if (userData.stats) {
         setUserStats({
-          posts: userData.stats.posts_count || userData.stats.post_count || userData.stats.posts || 0,
-          comments: userData.stats.comments_count || userData.stats.comment_count || userData.stats.comments || 0,
-          votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0, 
+          posts: userData.stats.posts_count || 0,
+          comments: userData.stats.comments_count || 0,
+          votes: userData.stats.votes_count || 0,
         });
       } else {
+        // Fallback to direct properties if stats object doesn't exist
         setUserStats({
-          posts: userData.post_count || userData.posts_count || userData.total_posts || userData.posts || 0,
-          comments: userData.comment_count || userData.comments_count || userData.total_comments || userData.comments || 0,
-          votes: userData.vote_count || userData.votes_count || userData.total_votes || userData.votes || 0, 
+          posts: userData.post_count || userData.posts_count || 0,
+          comments: userData.comment_count || userData.comments_count || 0,
+          votes: userData.vote_count || userData.votes_count || 0,
         });
       }
 
-      toast.success("Profile data loaded successfully");
+      console.log("Stats extracted:", {
+        posts: userData.stats?.posts_count || userData.post_count || 0,
+        comments: userData.stats?.comments_count || userData.comment_count || 0,
+        votes: userData.stats?.votes_count || userData.vote_count || 0
+      });
 
     } catch (error) {
       console.error("Profile data fetch error:", error);
@@ -372,7 +314,6 @@ This will permanently delete:
     );
   }
 
-  // Don't show "redirecting" message unless we're actually redirecting
   if (!user && !loading && !token) {
     return (
       <div className="max-w-4xl mx-auto p-6 text-center">
@@ -383,7 +324,6 @@ This will permanently delete:
     );
   }
 
-  // Show loading if user is not yet available but we have a token
   if (!user && token) {
     return (
       <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg mt-10">
@@ -414,14 +354,32 @@ This will permanently delete:
         </button>
       </div>
       
-      {/* Profile Information with Avatar */}
+      {/* Profile Information with Avatar Display Only */}
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-lg mb-8 border border-gray-200">
-        {/* Profile Picture Section - Moved to Top */}
         <div className="flex items-start space-x-6 mb-6 pb-6 border-b border-gray-200">
-          <AvatarUploader 
-            currentAvatar={fullUserData?.avatar_url || user?.avatar_url} 
-            onUploadSuccess={fetchFullUserProfile} 
-          />
+          {/* Avatar Display (no upload functionality here) */}
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg">
+              {fullUserData?.avatar_url || user?.avatar_url ? (
+                <img 
+                  src={fullUserData?.avatar_url || user?.avatar_url} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    console.log("Avatar image failed to load");
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className="w-full h-full flex items-center justify-center text-gray-400" style={{ display: fullUserData?.avatar_url || user?.avatar_url ? 'none' : 'flex' }}>
+                <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          
           <div className="flex-1">
             <h3 className="text-2xl font-bold text-gray-900 mb-1">{user.username}</h3>
             <p className="text-gray-600 mb-2">{user.email}</p>
@@ -585,10 +543,10 @@ This will permanently delete:
         </div>
       )}
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Including Avatar Upload */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             onClick={() => navigate("/posts/new")}
             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors shadow-sm"
@@ -608,6 +566,9 @@ This will permanently delete:
             </svg>
             Edit Profile
           </button>
+          
+          {/* Avatar Upload Button */}
+          <AvatarUploader onUploadSuccess={fetchFullUserProfile} />
           
           {user.is_admin && (
             <button
