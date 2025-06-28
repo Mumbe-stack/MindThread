@@ -162,8 +162,7 @@ The MindThread Team"""
         
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Registration error: {e}")
-        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+       
         return jsonify({"error": "Registration failed. Please try again."}), 500
 
 @auth_bp.route("/login", methods=["POST"])
@@ -371,7 +370,7 @@ def refresh_token():
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"Token refresh error: {e}")
+        
         return jsonify({"error": "Token refresh failed"}), 500
 
 @auth_bp.route("/logout", methods=["POST"])
