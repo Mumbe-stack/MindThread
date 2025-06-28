@@ -137,7 +137,6 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      // FIXED: Use correct /api/admin prefix for admin endpoints
       const statsResponse = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/stats`);
       const statsData = await handleApiResponse(statsResponse, "Failed to fetch stats");
       
@@ -224,7 +223,6 @@ const AdminDashboard = () => {
     
     setLoading(true);
     try {
-      // Keep /api prefix for general users endpoint
       const response = await makeAuthenticatedRequest(`${VITE_API_URL}/api/users`);
       const data = await handleApiResponse(response, "Failed to fetch users");
       
@@ -243,7 +241,6 @@ const AdminDashboard = () => {
     
     setSearchingUsers(true);
     try {
-      // FIXED: Use correct /api/admin prefix for admin search endpoint
       const response = await makeAuthenticatedRequest(
         `${VITE_API_URL}/api/admin/users/search?q=${encodeURIComponent(userSearchTerm)}`
       );
@@ -276,13 +273,11 @@ const AdminDashboard = () => {
     try {
       let postsData = [];
       try {
-        // FIXED: Use correct /api/admin prefix for admin posts endpoint
         const adminPostsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/posts`);
         if (adminPostsRes.ok) {
           const data = await handleApiResponse(adminPostsRes, "Failed to fetch admin posts");
           postsData = Array.isArray(data) ? data : (data.posts || []);
         } else {
-          // Keep /api prefix for general posts endpoint
           const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/posts`);
           const data = await handleApiResponse(postsRes, "Failed to fetch posts");
           postsData = Array.isArray(data) ? data : (data.posts || []);
@@ -293,7 +288,6 @@ const AdminDashboard = () => {
 
       let commentsData = [];
       try {
-        // FIXED: Use correct /api/admin prefix for admin comments endpoints
         const adminCommentsEndpoints = [
           `${VITE_API_URL}/api/admin/comments`,
           `${VITE_API_URL}/api/admin/all-comments`,
@@ -321,7 +315,6 @@ const AdminDashboard = () => {
           
           for (const post of postsToCheck) {
             try {
-              // Keep /api prefix for general post comments endpoint
               const postCommentsRes = await makeAuthenticatedRequest(
                 `${VITE_API_URL}/api/posts/${post.id}/comments`
               );
@@ -385,7 +378,6 @@ const AdminDashboard = () => {
       let flaggedCommentsData = [];
 
       try {
-        // FIXED: Use correct /api/admin prefix for admin flagged endpoints
         const postsRes = await makeAuthenticatedRequest(`${VITE_API_URL}/api/admin/flagged/posts`);
         if (postsRes.ok) {
           const data = await handleApiResponse(postsRes, "Failed to fetch flagged posts");
@@ -415,7 +407,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // FIXED: User actions with correct endpoints and logic
   const handleUserAction = async (userId, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -426,12 +417,10 @@ const AdminDashboard = () => {
 
       switch (action) {
         case "block":
-          // FIXED: Send specific state since backend now respects request body
           endpoint = `${VITE_API_URL}/api/admin/users/${userId}/block`;
           body = JSON.stringify({ is_blocked: true });
           break;
         case "unblock":
-          // FIXED: Send specific state since backend now respects request body
           endpoint = `${VITE_API_URL}/api/admin/users/${userId}/block`;
           body = JSON.stringify({ is_blocked: false });
           break;
@@ -443,12 +432,10 @@ const AdminDashboard = () => {
           method = "DELETE";
           break;
         case "make_admin":
-          // Backend still toggles admin status, so send empty body
           endpoint = `${VITE_API_URL}/api/admin/users/${userId}/admin`;
           body = JSON.stringify({});
           break;
         case "remove_admin":
-          // Backend still toggles admin status, so send empty body
           endpoint = `${VITE_API_URL}/api/admin/users/${userId}/admin`;
           body = JSON.stringify({});
           break;
@@ -470,7 +457,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // FIXED: Content actions with correct endpoints (flagging still toggles)
   const handleContentAction = async (type, id, action) => {
     if (!token || !user?.is_admin) return;
     
@@ -490,7 +476,6 @@ const AdminDashboard = () => {
           break;
         case "flag":
         case "unflag":
-          // Backend still toggles flag status, so send empty body
           endpoint = `${VITE_API_URL}/api/admin/${type}s/${id}/flag`;
           body = JSON.stringify({});
           break;
@@ -538,7 +523,7 @@ const AdminDashboard = () => {
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen px-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
@@ -549,125 +534,139 @@ const AdminDashboard = () => {
 
   if (!user?.is_admin) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen px-4">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
-          <p className="text-gray-600">You need admin privileges to access this page.</p>
-          <p className="text-sm text-gray-500 mt-2">Current user: {user?.username || "Not logged in"}</p>
-          <p className="text-sm text-gray-500">Admin status: {user?.is_admin ? "Yes" : "No"}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
+          <p className="text-gray-600 text-sm sm:text-base">You need admin privileges to access this page.</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-2">Current user: {user?.username || "Not logged in"}</p>
+          <p className="text-xs sm:text-sm text-gray-500">Admin status: {user?.is_admin ? "Yes" : "No"}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">🛡️ Admin Dashboard</h1>
-        <p className="text-gray-600">Manage users, content, and monitor platform activity</p>
+    <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6">
+      {/* Header - Responsive text sizes */}
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">🛡️ Admin Dashboard</h1>
+        <p className="text-sm sm:text-base text-gray-600">Manage users, content, and monitor platform activity</p>
       </div>
 
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-8">
+      {/* Navigation Tabs - Responsive with horizontal scroll on mobile */}
+      <div className="border-b border-gray-200 mb-4 sm:mb-6">
+        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-hide">
           {[
-            { id: "overview", label: "📊 Overview", icon: "📊" },
-            { id: "users", label: "👥 Users", icon: "👥" },
-            { id: "content", label: "📝 Content", icon: "📝" },
-            { id: "flagged", label: "🚩 Flagged", icon: "🚩" }
+            { id: "overview", label: "📊 Overview", shortLabel: "Overview" },
+            { id: "users", label: "👥 Users", shortLabel: "Users" },
+            { id: "content", label: "📝 Content", shortLabel: "Content" },
+            { id: "flagged", label: "🚩 Flagged", shortLabel: "Flagged" }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? "border-indigo-500 text-indigo-600"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
-              {tab.label}
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.shortLabel}</span>
             </button>
           ))}
         </nav>
       </div>
 
+      {/* Loading Indicator */}
       {loading && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-          <span className="ml-2 text-gray-600">Loading...</span>
+        <div className="flex justify-center items-center py-6 sm:py-8">
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-indigo-600"></div>
+          <span className="ml-2 text-sm sm:text-base text-gray-600">Loading...</span>
         </div>
       )}
 
+      {/* Overview Tab */}
       {activeTab === "overview" && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap gap-4">
+        <div className="space-y-4 sm:space-y-6">
+          {/* Action Buttons - Responsive grid */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4">
             <button
               onClick={() => setShowUserForm(true)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+              className="bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1 sm:gap-2 text-sm sm:text-base"
             >
-              ➕ Create User
+              <span className="hidden sm:inline">➕</span>
+              <span className="sm:hidden">+</span>
+              Create User
             </button>
             <button
               onClick={() => setShowPostForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1 sm:gap-2 text-sm sm:text-base"
             >
-              ➕ Create Post
+              <span className="hidden sm:inline">➕</span>
+              <span className="sm:hidden">+</span>
+              Create Post
             </button>
-            <ExportCSV data={users} filename="users_report.csv" />
+            <div className="col-span-2 sm:col-span-1">
+              <ExportCSV data={users} filename="users_report.csv" />
+            </div>
             <button
               onClick={fetchOverviewData}
               disabled={loading}
-              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              className="bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-1 sm:gap-2 disabled:opacity-50 text-sm sm:text-base"
             >
-              🔄 Refresh Data
+              🔄 Refresh
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 hover:shadow-md transition-shadow">
+          {/* Stats Grid - Fully responsive */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+            <div className="bg-blue-50 p-4 sm:p-6 rounded-lg border border-blue-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-600 text-sm font-medium">Total Users</p>
-                  <p className="text-2xl font-bold text-blue-900">{stats.users || 0}</p>
+                  <p className="text-blue-600 text-xs sm:text-sm font-medium">Total Users</p>
+                  <p className="text-xl sm:text-2xl font-bold text-blue-900">{stats.users || 0}</p>
                 </div>
-                <div className="text-blue-500 text-2xl">👥</div>
+                <div className="text-blue-500 text-xl sm:text-2xl">👥</div>
               </div>
             </div>
 
-            <div className="bg-green-50 p-6 rounded-lg border border-green-200 hover:shadow-md transition-shadow">
+            <div className="bg-green-50 p-4 sm:p-6 rounded-lg border border-green-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-600 text-sm font-medium">Total Posts</p>
-                  <p className="text-2xl font-bold text-green-900">{stats.posts || 0}</p>
+                  <p className="text-green-600 text-xs sm:text-sm font-medium">Total Posts</p>
+                  <p className="text-xl sm:text-2xl font-bold text-green-900">{stats.posts || 0}</p>
                 </div>
-                <div className="text-green-500 text-2xl">📝</div>
+                <div className="text-green-500 text-xl sm:text-2xl">📝</div>
               </div>
             </div>
 
-            <div className="bg-purple-50 p-6 rounded-lg border border-purple-200 hover:shadow-md transition-shadow">
+            <div className="bg-purple-50 p-4 sm:p-6 rounded-lg border border-purple-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-600 text-sm font-medium">Total Comments</p>
-                  <p className="text-2xl font-bold text-purple-900">{stats.comments || 0}</p>
+                  <p className="text-purple-600 text-xs sm:text-sm font-medium">Total Comments</p>
+                  <p className="text-xl sm:text-2xl font-bold text-purple-900">{stats.comments || 0}</p>
                 </div>
-                <div className="text-purple-500 text-2xl">💬</div>
+                <div className="text-purple-500 text-xl sm:text-2xl">💬</div>
               </div>
             </div>
 
-            <div className="bg-red-50 p-6 rounded-lg border border-red-200 hover:shadow-md transition-shadow">
+            <div className="bg-red-50 p-4 sm:p-6 rounded-lg border border-red-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-red-600 text-sm font-medium">Flagged Content</p>
-                  <p className="text-2xl font-bold text-red-900">{stats.flagged || 0}</p>
+                  <p className="text-red-600 text-xs sm:text-sm font-medium">Flagged Content</p>
+                  <p className="text-xl sm:text-2xl font-bold text-red-900">{stats.flagged || 0}</p>
                 </div>
-                <div className="text-red-500 text-2xl">🚩</div>
+                <div className="text-red-500 text-xl sm:text-2xl">🚩</div>
               </div>
             </div>
           </div>
 
+          {/* Chart - Responsive height */}
           {chartData && (
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4">📊 Weekly Activity Trends</h3>
-              <div className="h-80">
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold mb-4">📊 Weekly Activity Trends</h3>
+              <div className="h-60 sm:h-80">
                 <Bar 
                   data={chartData} 
                   options={{
@@ -676,17 +675,36 @@ const AdminDashboard = () => {
                     plugins: {
                       legend: {
                         position: 'top',
+                        labels: {
+                          boxWidth: 12,
+                          font: {
+                            size: window.innerWidth < 640 ? 10 : 12
+                          }
+                        }
                       },
                       title: {
                         display: true,
-                        text: 'Platform Activity (Last 7 Days)'
+                        text: 'Platform Activity (Last 7 Days)',
+                        font: {
+                          size: window.innerWidth < 640 ? 12 : 16
+                        }
                       }
                     },
                     scales: {
                       y: {
                         beginAtZero: true,
                         ticks: {
-                          stepSize: 1
+                          stepSize: 1,
+                          font: {
+                            size: window.innerWidth < 640 ? 10 : 12
+                          }
+                        }
+                      },
+                      x: {
+                        ticks: {
+                          font: {
+                            size: window.innerWidth < 640 ? 10 : 12
+                          }
                         }
                       }
                     }
@@ -698,53 +716,56 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Users Tab */}
       {activeTab === "users" && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">👥 User Management</h3>
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <h3 className="text-base sm:text-lg font-semibold">👥 User Management</h3>
             <button
               onClick={fetchAllUsers}
               disabled={loading}
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 text-sm sm:text-base"
             >
               🔄 Refresh Users
             </button>
           </div>
 
+          {/* Search Input */}
           <div className="relative">
             <input
               type="text"
               placeholder="Search users by username or email..."
               value={userSearchTerm}
               onChange={(e) => setUserSearchTerm(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             {searchingUsers && (
               <div className="absolute right-3 top-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-indigo-600"></div>
               </div>
             )}
           </div>
 
+          {/* Users List - Responsive cards */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-3 bg-gray-50 border-b">
-              <h4 className="font-medium text-gray-900">
+            <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b">
+              <h4 className="font-medium text-gray-900 text-sm sm:text-base">
                 Users ({filteredUsers.length})
               </h4>
             </div>
             <div className="divide-y divide-gray-200">
               {filteredUsers.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-500">
+                <div className="px-4 sm:px-6 py-6 sm:py-8 text-center text-gray-500 text-sm sm:text-base">
                   {loading ? "Loading users..." : "No users found"}
                 </div>
               ) : (
                 filteredUsers.map((userItem) => (
-                  <div key={userItem.id} className="px-6 py-4 hover:bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h5 className="font-medium text-gray-900">{userItem.username}</h5>
-                        <p className="text-sm text-gray-600">{userItem.email}</p>
-                        <div className="flex gap-2 mt-1">
+                  <div key={userItem.id} className="px-4 sm:px-6 py-4 hover:bg-gray-50">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h5 className="font-medium text-gray-900 text-sm sm:text-base truncate">{userItem.username}</h5>
+                        <p className="text-xs sm:text-sm text-gray-600 truncate">{userItem.email}</p>
+                        <div className="flex gap-2 mt-2">
                           {userItem.is_admin && (
                             <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
                               Admin
@@ -757,10 +778,10 @@ const AdminDashboard = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => handleUserAction(userItem.id, userItem.is_blocked ? "unblock" : "block")}
-                          className={`px-3 py-1 text-xs rounded ${
+                          className={`px-2 sm:px-3 py-1 text-xs rounded transition-colors ${
                             userItem.is_blocked
                               ? "bg-green-100 text-green-800 hover:bg-green-200"
                               : "bg-red-100 text-red-800 hover:bg-red-200"
@@ -770,7 +791,7 @@ const AdminDashboard = () => {
                         </button>
                         <button
                           onClick={() => handleUserAction(userItem.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
                         >
                           Delete
                         </button>
@@ -784,67 +805,70 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Content Tab */}
       {activeTab === "content" && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">📝 Content Management</h3>
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <h3 className="text-base sm:text-lg font-semibold">📝 Content Management</h3>
             <button
               onClick={fetchAllContent}
               disabled={loading}
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 text-sm sm:text-base"
             >
               🔄 Refresh Content
             </button>
           </div>
 
+          {/* Search Input */}
           <div className="relative">
             <input
               type="text"
               placeholder="Search posts and comments..."
               value={contentSearchTerm}
               onChange={(e) => setContentSearchTerm(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full p-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
 
+          {/* Posts List */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-3 bg-gray-50 border-b">
-              <h4 className="font-medium text-gray-900">
+            <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b">
+              <h4 className="font-medium text-gray-900 text-sm sm:text-base">
                 Posts ({filteredPosts.length})
               </h4>
             </div>
-            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-gray-200 max-h-80 sm:max-h-96 overflow-y-auto">
               {filteredPosts.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-500">
+                <div className="px-4 sm:px-6 py-6 sm:py-8 text-center text-gray-500 text-sm sm:text-base">
                   {loading ? "Loading posts..." : "No posts found"}
                 </div>
               ) : (
                 filteredPosts.slice(0, 10).map((post) => (
-                  <div key={post.id} className="px-6 py-4 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h5 className="font-medium text-gray-900 truncate">{post.title}</h5>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                  <div key={post.id} className="px-4 sm:px-6 py-4 hover:bg-gray-50">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h5 className="font-medium text-gray-900 text-sm sm:text-base line-clamp-1">{post.title}</h5>
+                        <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
                           {post.content?.substring(0, 100)}...
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           By {post.author?.username || "Unknown"} • {new Date(post.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => handleContentAction("post", post.id, post.is_flagged ? "unflag" : "flag")}
-                          className={`px-3 py-1 text-xs rounded hover:bg-yellow-200 ${
+                          className={`px-2 sm:px-3 py-1 text-xs rounded transition-colors ${
                             post.is_flagged 
-                              ? "bg-red-100 text-red-800" 
-                              : "bg-yellow-100 text-yellow-800"
+                              ? "bg-red-100 text-red-800 hover:bg-red-200" 
+                              : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
                           }`}
                         >
                           {post.is_flagged ? "Unflag" : "Flag"}
                         </button>
                         <button
                           onClick={() => handleContentAction("post", post.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
                         >
                           Delete
                         </button>
@@ -856,43 +880,44 @@ const AdminDashboard = () => {
             </div>
           </div>
 
+          {/* Comments List */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-3 bg-gray-50 border-b">
-              <h4 className="font-medium text-gray-900">
+            <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b">
+              <h4 className="font-medium text-gray-900 text-sm sm:text-base">
                 Comments ({filteredComments.length})
               </h4>
             </div>
-            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-gray-200 max-h-80 sm:max-h-96 overflow-y-auto">
               {filteredComments.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-500">
+                <div className="px-4 sm:px-6 py-6 sm:py-8 text-center text-gray-500 text-sm sm:text-base">
                   {loading ? "Loading comments..." : "No comments found"}
                 </div>
               ) : (
                 filteredComments.slice(0, 10).map((comment) => (
-                  <div key={comment.id} className="px-6 py-4 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900 line-clamp-3">
+                  <div key={comment.id} className="px-4 sm:px-6 py-4 hover:bg-gray-50">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-900 line-clamp-3">
                           {comment.content}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           By {comment.author?.username || "Unknown"} • {new Date(comment.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => handleContentAction("comment", comment.id, comment.is_flagged ? "unflag" : "flag")}
-                          className={`px-3 py-1 text-xs rounded hover:bg-yellow-200 ${
+                          className={`px-2 sm:px-3 py-1 text-xs rounded transition-colors ${
                             comment.is_flagged 
-                              ? "bg-red-100 text-red-800" 
-                              : "bg-yellow-100 text-yellow-800"
+                              ? "bg-red-100 text-red-800 hover:bg-red-200" 
+                              : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
                           }`}
                         >
                           {comment.is_flagged ? "Unflag" : "Flag"}
                         </button>
                         <button
                           onClick={() => handleContentAction("comment", comment.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
                         >
                           Delete
                         </button>
@@ -906,53 +931,55 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Flagged Tab */}
       {activeTab === "flagged" && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">🚩 Flagged Content</h3>
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <h3 className="text-base sm:text-lg font-semibold">🚩 Flagged Content</h3>
             <button
               onClick={fetchFlaggedContent}
               disabled={loading}
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 text-sm sm:text-base"
             >
               🔄 Refresh Flagged Content
             </button>
           </div>
 
+          {/* Flagged Posts */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-3 bg-red-50 border-b border-red-200">
-              <h4 className="font-medium text-red-900">
+            <div className="px-4 sm:px-6 py-3 bg-red-50 border-b border-red-200">
+              <h4 className="font-medium text-red-900 text-sm sm:text-base">
                 🚩 Flagged Posts ({flaggedPosts.length})
               </h4>
             </div>
             <div className="divide-y divide-gray-200">
               {flaggedPosts.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-500">
+                <div className="px-4 sm:px-6 py-6 sm:py-8 text-center text-gray-500 text-sm sm:text-base">
                   No flagged posts found
                 </div>
               ) : (
                 flaggedPosts.map((post) => (
-                  <div key={post.id} className="px-6 py-4 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h5 className="font-medium text-gray-900">{post.title}</h5>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                  <div key={post.id} className="px-4 sm:px-6 py-4 hover:bg-gray-50">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h5 className="font-medium text-gray-900 text-sm sm:text-base line-clamp-1">{post.title}</h5>
+                        <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
                           {post.content?.substring(0, 150)}...
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           By {post.author?.username || "Unknown"} • Flagged on {new Date(post.flagged_at || post.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => handleContentAction("post", post.id, "approve")}
-                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
                         >
                           Approve
                         </button>
                         <button
                           onClick={() => handleContentAction("post", post.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
                         >
                           Delete
                         </button>
@@ -964,37 +991,38 @@ const AdminDashboard = () => {
             </div>
           </div>
 
+          {/* Flagged Comments */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-3 bg-red-50 border-b border-red-200">
-              <h4 className="font-medium text-red-900">
+            <div className="px-4 sm:px-6 py-3 bg-red-50 border-b border-red-200">
+              <h4 className="font-medium text-red-900 text-sm sm:text-base">
                 🚩 Flagged Comments ({flaggedComments.length})
               </h4>
             </div>
             <div className="divide-y divide-gray-200">
               {flaggedComments.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-500">
+                <div className="px-4 sm:px-6 py-6 sm:py-8 text-center text-gray-500 text-sm sm:text-base">
                   No flagged comments found
                 </div>
               ) : (
                 flaggedComments.map((comment) => (
-                  <div key={comment.id} className="px-6 py-4 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900">{comment.content}</p>
+                  <div key={comment.id} className="px-4 sm:px-6 py-4 hover:bg-gray-50">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-900 line-clamp-3">{comment.content}</p>
                         <p className="text-xs text-gray-500 mt-1">
                           By {comment.author?.username || "Unknown"} • Flagged on {new Date(comment.flagged_at || comment.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => handleContentAction("comment", comment.id, "approve")}
-                          className="px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
                         >
                           Approve
                         </button>
                         <button
                           onClick={() => handleContentAction("comment", comment.id, "delete")}
-                          className="px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          className="px-2 sm:px-3 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
                         >
                           Delete
                         </button>
@@ -1008,6 +1036,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Modals */}
       {showUserForm && (
         <Modal title="Create New User" onClose={() => setShowUserForm(false)}>
           <CreateUserForm 
