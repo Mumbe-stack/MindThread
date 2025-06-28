@@ -1,4 +1,5 @@
 from datetime import timedelta
+from flask import send_from_directory
 import os
 import logging
 from flask import Flask, jsonify, request
@@ -93,6 +94,13 @@ db.init_app(app)
 migrate = Migrate(app, db)
 mail = Mail(app)
 jwt = JWTManager(app)
+
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    upload_folder = os.path.join(app.root_path, 'uploads')
+    return send_from_directory(upload_folder, filename)
+
 
 # Enhanced JWT Error Handlers
 @jwt.token_in_blocklist_loader

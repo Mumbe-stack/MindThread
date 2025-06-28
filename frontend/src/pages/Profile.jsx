@@ -5,128 +5,61 @@ import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
-const Profile = () => {
-  const { user, deleteUser, token, loading, authenticatedRequest } = useAuth(); 
-  const navigate = useNavigate();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
-  const [globalStats, setGlobalStats] = useState({ users: 0, posts: 0, comments: 0 });
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [fullUserData, setFullUserData] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+// Fixed Avatar Uploader Component
+const AvatarUploader = ({ currentAvatar, onUploadSuccess }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(currentAvatar);
+  const { token } = useAuth();
 
-  // Custom info toast function
-  const showInfo = (message) => {
-    toast(message, {
-      icon: "ℹ️",
-      style: {
-        borderRadius: '10px',
-        background: '#3b82f6',
-        color: '#fff',
-      },
-      duration: 4000,
-    });
+  // Enhanced API response handler
+  const handleApiResponse = async (response, errorMessage = "API request failed") => {
+    if (!response.ok) {
+      let errorText = errorMessage;
+      try {
+        const errorData = await response.json();
+        errorText = errorData.error || errorData.message || errorMessage;
+      } catch {
+        if (response.status === 404) {
+          errorText = `Endpoint not found: ${response.url}`;
+        } else if (response.status === 403) {
+          errorText = "Access denied";
+        } else if (response.status === 401) {
+          errorText = "Authentication required";
+        } else {
+          errorText = `${errorMessage} (${response.status})`;
+        }
+      }
+      throw new Error(errorText);
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Server returned non-JSON response");
+    }
+
+    return response.json();
   };
 
-  useEffect(() => {
-    // Only redirect if user is definitively not authenticated and not loading
-    if (!loading && !token && !user) {
-      navigate("/login");
-    }
-  }, [token, loading, user, navigate]);
-
-  useEffect(() => {
-    if (user && token) {
-      fetchUserStats();
-    }
-  }, [user, token]);
-
-  // Improved stats fetching with better error handling like AdminDashboard
-  const fetchUserStats = async () => {
-    if (!token || !user) return;
-    
+  // Enhanced authenticated fetch - NO Content-Type for FormData
+  const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
-      setIsLoadingStats(true);
-      console.log("Fetching user stats...");
-      
-      // Fetch user data
-      const response = await authenticatedRequest(`${API_URL}/api/users/me`);
-      
-      if (response.ok) {
-        const userData = await response.json();
-        console.log("User data received:", userData);
-        
-        setFullUserData(userData);
-        
-        // Parse stats from the response with multiple fallbacks
-        let stats = { posts: 0, comments: 0, votes: 0 };
-        
-        if (userData.stats) {
-          stats = {
-            posts: userData.stats.posts_count || userData.stats.post_count || userData.stats.posts || 0,
-            comments: userData.stats.comments_count || userData.stats.comment_count || userData.stats.comments || 0,
-            votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0
-          };
-        } else {
-          // Try direct properties as fallback
-          stats = {
-            posts: userData.post_count || userData.posts_count || 0,
-            comments: userData.comment_count || userData.comments_count || 0,
-            votes: userData.vote_count || userData.votes_count || 0
-          };
-        }
-        
-        console.log("Parsed stats:", stats);
-        setUserStats(stats);
-        
-        // Try to fetch global stats for comparison (like AdminDashboard)
-        if (user.is_admin) {
-          try {
-            const globalResponse = await authenticatedRequest(`${API_URL}/api/admin/stats`);
-            if (globalResponse.ok) {
-              const globalData = await globalResponse.json();
-              setGlobalStats({
-                users: globalData.users || globalData.total_users || 0,
-                posts: globalData.posts || globalData.total_posts || 0,
-                comments: globalData.comments || globalData.total_comments || 0
-              });
-            }
-          } catch (globalError) {
-            console.log("Could not fetch global stats:", globalError.message);
-          }
-        }
-        
-        // Always show success message with stats context
-        const totalActivity = stats.posts + stats.comments + stats.votes;
-        if (totalActivity > 0) {
-          toast.success(`Profile loaded: ${stats.posts} posts, ${stats.comments} comments, ${stats.votes} votes`);
-        } else {
-          showInfo("Profile loaded successfully! Start by creating your first post.");
-        }
-        
-      } else {
-        throw new Error(`Failed to fetch profile data (${response.status})`);
-      }
-
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          // DON'T set Content-Type for FormData - browser sets it automatically
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+      return response;
     } catch (error) {
-      console.error("Profile stats fetch error:", error);
-      
-      if (error.message.includes("401") || error.message.includes("Authentication")) {
-        toast.error("Session expired. Please log in again.");
-        navigate("/login");
-      } else {
-        toast.error(`Failed to load profile: ${error.message}`);
-      }
-      
-      // Set default stats on error
-      setUserStats({ posts: 0, comments: 0, votes: 0 });
-    } finally {
-      setIsLoadingStats(false);
+      console.error("Network error:", error);
+      throw new Error("Network error. Please check your connection.");
     }
   };
 
-  const handleAvatarUpload = async (event) => {
+  const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -140,58 +73,238 @@ const Profile = () => {
       return;
     }
 
-    setIsUploadingAvatar(true);
+    // Show preview immediately
+    const fileUrl = URL.createObjectURL(file);
+    setPreviewUrl(fileUrl);
+    
+    // Upload the file
+    await uploadAvatar(file);
+  };
+
+  const uploadAvatar = async (file) => {
+    setIsUploading(true);
     
     try {
       const formData = new FormData();
       formData.append('avatar', file);
 
-      // Try the endpoints that should work after backend fixes
-      const endpoints = [
-        `${API_URL}/api/users/me/avatar`,
-        `${API_URL}/api/upload-avatar`
-      ];
+      console.log("Uploading avatar to:", `${API_URL}/api/users/me/avatar`);
 
-      let success = false;
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying avatar upload to: ${endpoint}`);
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              "Authorization": `Bearer ${token}`,
-            },
-            credentials: "include",
-            body: formData,
-          });
+      // Use the CORRECT endpoint from user.py
+      const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me/avatar`, {
+        method: 'POST',
+        body: formData,
+        // Don't set headers - let browser handle Content-Type for FormData
+      });
 
-          if (response.ok) {
-            const result = await response.json();
-            console.log("Avatar upload success:", result);
-            toast.success('Avatar updated successfully!');
-            // Refresh user data
-            await fetchUserStats();
-            success = true;
-            break;
-          } else {
-            const errorData = await response.json();
-            console.log(`${endpoint} failed:`, errorData);
-          }
-        } catch (error) {
-          console.log(`Endpoint ${endpoint} failed:`, error.message);
-          continue;
+      if (response.ok) {
+        const result = await handleApiResponse(response, "Failed to upload avatar");
+        console.log("Avatar upload success:", result);
+        
+        toast.success('Avatar updated successfully!');
+        
+        // Trigger profile refresh
+        if (onUploadSuccess) {
+          await onUploadSuccess();
         }
-      }
-
-      if (!success) {
-        toast.error('Avatar upload not available yet. Feature coming soon!');
+        
+        // Update preview with the new avatar URL if provided
+        if (result.avatar_url) {
+          setPreviewUrl(result.avatar_url);
+        }
+        
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Avatar upload failed:", errorData);
+        throw new Error(errorData.error || errorData.message || `Upload failed (${response.status})`);
       }
 
     } catch (error) {
       console.error("Avatar upload error:", error);
       toast.error(`Upload failed: ${error.message}`);
+      
+      // Revert preview on error
+      setPreviewUrl(currentAvatar);
     } finally {
-      setIsUploadingAvatar(false);
+      setIsUploading(false);
+    }
+  };
+
+  // Update preview when currentAvatar changes
+  useEffect(() => {
+    setPreviewUrl(currentAvatar);
+  }, [currentAvatar]);
+
+  return (
+    <div className="flex items-center space-x-4">
+      <div className="relative">
+        <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg">
+          {previewUrl ? (
+            <img 
+              src={previewUrl} 
+              alt="Profile" 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                console.log("Avatar image failed to load:", previewUrl);
+                setPreviewUrl(null);
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-400">
+              <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+            </div>
+          )}
+        </div>
+        {isUploading && (
+          <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+          </div>
+        )}
+      </div>
+      
+      <div className="flex-1">
+        <label className="block">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            disabled={isUploading}
+            className="sr-only"
+          />
+          <div className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {isUploading ? 'Uploading...' : 'Update Photo'}
+          </div>
+        </label>
+        <p className="text-xs text-gray-500 mt-1">
+          JPG, PNG or GIF. Max 5MB.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const Profile = () => {
+  const { user, deleteUser, token, loading } = useAuth(); 
+  const navigate = useNavigate();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [fullUserData, setFullUserData] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Enhanced API response handler (same as AdminDashboard)
+  const handleApiResponse = async (response, errorMessage = "API request failed") => {
+    if (!response.ok) {
+      let errorText = errorMessage;
+      try {
+        const errorData = await response.json();
+        errorText = errorData.error || errorData.message || errorMessage;
+      } catch {
+        if (response.status === 404) {
+          errorText = `Endpoint not found: ${response.url}`;
+        } else if (response.status === 403) {
+          errorText = "Access denied";
+        } else if (response.status === 401) {
+          errorText = "Authentication required";
+        } else {
+          errorText = `${errorMessage} (${response.status})`;
+        }
+      }
+      throw new Error(errorText);
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Server returned non-JSON response");
+    }
+
+    return response.json();
+  };
+
+  // Enhanced authenticated fetch (same as AdminDashboard)
+  const makeAuthenticatedRequest = async (url, options = {}) => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+      return response;
+    } catch (error) {
+      console.error("Network error:", error);
+      throw new Error("Network error. Please check your connection.");
+    }
+  };
+
+  useEffect(() => {
+    // Only redirect if user is definitively not authenticated and not loading
+    if (!loading && !token && !user) {
+      navigate("/login");
+    }
+  }, [token, loading, user, navigate]);
+
+  useEffect(() => {
+    if (user && token) {
+      fetchFullUserProfile();
+    }
+  }, [user, token]);
+
+  const fetchFullUserProfile = async () => {
+    if (!token) return;
+    
+    try {
+      setIsLoadingStats(true);
+      
+      // Use the same pattern as AdminDashboard
+      console.log("Fetching user profile from:", `${API_URL}/api/users/me`);
+      
+      const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me`);
+      const userData = await handleApiResponse(response, "Failed to load profile data");
+      
+      console.log("User data received:", userData);
+      setFullUserData(userData);
+      
+      // Parse stats with same flexibility as AdminDashboard
+      if (userData.stats) {
+        setUserStats({
+          posts: userData.stats.posts_count || userData.stats.post_count || userData.stats.posts || 0,
+          comments: userData.stats.comments_count || userData.stats.comment_count || userData.stats.comments || 0,
+          votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0, 
+        });
+      } else {
+        setUserStats({
+          posts: userData.post_count || userData.posts_count || userData.total_posts || userData.posts || 0,
+          comments: userData.comment_count || userData.comments_count || userData.total_comments || userData.comments || 0,
+          votes: userData.vote_count || userData.votes_count || userData.total_votes || userData.votes || 0, 
+        });
+      }
+
+      toast.success("Profile data loaded successfully");
+
+    } catch (error) {
+      console.error("Profile data fetch error:", error);
+      
+      if (error.message.includes("401") || error.message.includes("Authentication")) {
+        toast.error("Authentication expired. Please log in again.");
+        navigate("/login");
+      } else if (error.message.includes("404")) {
+        toast.error("Profile not found");
+      } else {
+        toast.error(`Failed to load profile: ${error.message}`);
+      }
+      
+      setUserStats({ posts: 0, comments: 0, votes: 0 });
+    } finally {
+      setIsLoadingStats(false);
     }
   };
 
@@ -229,14 +342,13 @@ This will permanently delete:
     }
   };
 
-  // Handle edit profile - show info message for now
   const handleEditProfile = () => {
-    showInfo("Profile editing feature coming soon! For now, you can update your avatar.");
+    navigate("/profile/edit");
   };
 
   const handleRefreshProfile = async () => {
     setIsRefreshing(true);
-    await fetchUserStats();
+    await fetchFullUserProfile();
     setIsRefreshing(false);
     toast.success("Profile refreshed");
   };
@@ -260,6 +372,7 @@ This will permanently delete:
     );
   }
 
+  // Don't show "redirecting" message unless we're actually redirecting
   if (!user && !loading && !token) {
     return (
       <div className="max-w-4xl mx-auto p-6 text-center">
@@ -270,6 +383,7 @@ This will permanently delete:
     );
   }
 
+  // Show loading if user is not yet available but we have a token
   if (!user && token) {
     return (
       <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg mt-10">
@@ -300,34 +414,17 @@ This will permanently delete:
         </button>
       </div>
       
-      {/* Profile Information */}
+      {/* Profile Information with Avatar */}
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-lg mb-8 border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Username</label>
-            <p className="text-lg font-medium text-gray-900">{user.username}</p>
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Email</label>
-            <p className="text-lg text-gray-900">{user.email}</p>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
-            <p className="text-base font-mono text-gray-800">
-              {user.created_at
-                ? new Date(user.created_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })
-            : 'Recently joined'}
-          </p>
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Account Type</label>
+        {/* Profile Picture Section - Moved to Top */}
+        <div className="flex items-start space-x-6 mb-6 pb-6 border-b border-gray-200">
+          <AvatarUploader 
+            currentAvatar={fullUserData?.avatar_url || user?.avatar_url} 
+            onUploadSuccess={fetchFullUserProfile} 
+          />
+          <div className="flex-1">
+            <h3 className="text-2xl font-bold text-gray-900 mb-1">{user.username}</h3>
+            <p className="text-gray-600 mb-2">{user.email}</p>
             <div className="flex items-center space-x-2">
               {user.is_admin ? (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-200">
@@ -344,15 +441,6 @@ This will permanently delete:
                   Member
                 </span>
               )}
-            </div>
-          </div>
-        </div>
-
-        {/* Account Status */}
-        <div className="pt-4 border-t border-gray-200">
-          <div className="space-y-1">
-            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Account Status</label>
-            <div className="flex items-center space-x-2">
               {user.is_blocked ? (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -371,192 +459,88 @@ This will permanently delete:
             </div>
           </div>
         </div>
-      </div>
 
-      {/* User Statistics - Enhanced like AdminDashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-indigo-50 p-6 rounded-lg border border-indigo-200 shadow-sm hover:shadow-md transition-shadow">
-          {isLoadingStats ? (
-            <div className="animate-pulse">
-              <div className="h-8 bg-indigo-200 rounded mb-2"></div>
-              <div className="h-4 bg-indigo-200 rounded"></div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-indigo-600 text-sm font-medium uppercase tracking-wide">Your Posts</p>
-                  <p className="text-3xl font-bold text-indigo-900 mb-1">{userStats.posts || 0}</p>
-                  <p className="text-xs text-indigo-600">
-                    {userStats.posts === 0 ? "Create your first post!" : 
-                     userStats.posts === 1 ? "Great start!" : 
-                     userStats.posts < 5 ? "Keep posting!" : "Prolific author! 🌟"}
-                  </p>
-                </div>
-                <div className="text-indigo-500 text-3xl">📝</div>
-              </div>
-            </>
-          )}
-        </div>
-        
-        <div className="bg-green-50 p-6 rounded-lg border border-green-200 shadow-sm hover:shadow-md transition-shadow">
-          {isLoadingStats ? (
-            <div className="animate-pulse">
-              <div className="h-8 bg-green-200 rounded mb-2"></div>
-              <div className="h-4 bg-green-200 rounded"></div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-600 text-sm font-medium uppercase tracking-wide">Your Comments</p>
-                  <p className="text-3xl font-bold text-green-900 mb-1">{userStats.comments || 0}</p>
-                  <p className="text-xs text-green-600">
-                    {userStats.comments === 0 ? "Join the conversation!" : 
-                     userStats.comments === 1 ? "Nice engagement!" : 
-                     userStats.comments < 10 ? "Active participant!" : "Community champion! 🎉"}
-                  </p>
-                </div>
-                <div className="text-green-500 text-3xl">💬</div>
-              </div>
-            </>
-          )}
-        </div>
-        
-        <div className="bg-orange-50 p-6 rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
-          {isLoadingStats ? (
-            <div className="animate-pulse">
-              <div className="h-8 bg-orange-200 rounded mb-2"></div>
-              <div className="h-4 bg-orange-200 rounded"></div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-orange-600 text-sm font-medium uppercase tracking-wide">Your Votes</p>
-                  <p className="text-3xl font-bold text-orange-900 mb-1">{userStats.votes || 0}</p>
-                  <p className="text-xs text-orange-600">
-                    {userStats.votes === 0 ? "Start voting on posts!" : 
-                     userStats.votes === 1 ? "Thanks for voting!" : 
-                     userStats.votes < 20 ? "Good participation!" : "Super engaged! 🚀"}
-                  </p>
-                </div>
-                <div className="text-orange-500 text-3xl">👍</div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Activity Summary Card */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200 mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Your Activity Summary</h3>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold text-indigo-600">{(userStats.posts + userStats.comments + userStats.votes) || 0}</p>
-                <p className="text-sm text-gray-600">Total Actions</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-600">
-                  {user.created_at ? Math.floor((new Date() - new Date(user.created_at)) / (1000 * 60 * 60 * 24)) : 0}
-                </p>
-                <p className="text-sm text-gray-600">Days Active</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-purple-600">
-                  {(userStats.posts + userStats.comments) > 0 ? 
-                    Math.round((userStats.votes / (userStats.posts + userStats.comments)) * 10) / 10 || 0 : 0}
-                </p>
-                <p className="text-sm text-gray-600">Engagement Ratio</p>
-              </div>
-            </div>
-          </div>
-          <div className="text-6xl opacity-20">🎯</div>
-        </div>
-      </div>
-
-      {/* Platform Context (for admins) */}
-      {user.is_admin && globalStats.users > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">🌐 Platform Overview</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-xl font-bold text-blue-600">{globalStats.users}</p>
-              <p className="text-sm text-gray-600">Total Users</p>
-              <p className="text-xs text-blue-500">
-                You're one of {globalStats.users} members!
-              </p>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <p className="text-xl font-bold text-green-600">{globalStats.posts}</p>
-              <p className="text-sm text-gray-600">Total Posts</p>
-              <p className="text-xs text-green-500">
-                {globalStats.posts > 0 ? `${Math.round((userStats.posts / globalStats.posts) * 100)}% yours` : "0% yours"}
-              </p>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <p className="text-xl font-bold text-purple-600">{globalStats.comments}</p>
-              <p className="text-sm text-gray-600">Total Comments</p>
-              <p className="text-xs text-purple-500">
-                {globalStats.comments > 0 ? `${Math.round((userStats.comments / globalStats.comments) * 100)}% yours` : "0% yours"}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Avatar Upload Section */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4">Profile Picture</h3>
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300">
-              {fullUserData?.avatar_url || user?.avatar_url ? (
-                <img 
-                  src={fullUserData?.avatar_url || user?.avatar_url} 
-                  alt="Profile" 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-            {isUploadingAvatar && (
-              <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-1">
-            <label className="block">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                disabled={isUploadingAvatar}
-                className="sr-only"
-              />
-              <div className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {isUploadingAvatar ? 'Uploading...' : 'Choose Photo'}
-              </div>
-            </label>
-            <p className="text-xs text-gray-500 mt-1">
-              JPG, PNG or GIF. Max 5MB.
+        {/* User Details */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
+            <p className="text-lg text-gray-900">
+              {user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              }) : 'Recently joined'}
+            </p>
+            <p className="text-sm text-gray-500">
+              {user.created_at ? `${Math.floor((new Date() - new Date(user.created_at)) / (1000 * 60 * 60 * 24))} days ago` : ''}
             </p>
           </div>
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Account ID</label>
+            <p className="text-lg font-mono text-gray-900">#{user.id}</p>
+            <p className="text-sm text-gray-500">Your unique identifier</p>
+          </div>
+        </div>
+      </div>
+
+      {/* User Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm hover:shadow-md transition-shadow">
+          {isLoadingStats ? (
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded"></div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-3 bg-indigo-100 rounded-lg">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="text-3xl font-bold text-indigo-600 mb-1">{userStats.posts}</p>
+              <p className="text-sm font-medium text-gray-500">Posts</p>
+            </>
+          )}
+        </div>
+        
+        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm hover:shadow-md transition-shadow">
+          {isLoadingStats ? (
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded"></div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-3 bg-green-100 rounded-lg">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p className="text-3xl font-bold text-green-600 mb-1">{userStats.comments}</p>
+              <p className="text-sm font-medium text-gray-500">Comments</p>
+            </>
+          )}
+        </div>
+        
+        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm hover:shadow-md transition-shadow">
+          {isLoadingStats ? (
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded"></div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-3 bg-orange-100 rounded-lg">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
+              </div>
+              <p className="text-3xl font-bold text-orange-600 mb-1">{userStats.votes}</p>
+              <p className="text-sm font-medium text-gray-500">Votes</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -676,6 +660,26 @@ This will permanently delete:
           )}
         </button>
       </div>
+
+      {/* Debug Panel (Development Only) */}
+      {import.meta.env.DEV && (
+        <div className="fixed bottom-4 left-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
+          <h4 className="font-bold mb-2">🔍 Profile Debug</h4>
+          <div className="space-y-1">
+            <div>API: {API_URL}</div>
+            <div>User: {user?.username}</div>
+            <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
+            <div>Loading: {loading ? "🔄" : "✅"}</div>
+            <div>Stats: P:{userStats.posts} C:{userStats.comments} V:{userStats.votes}</div>
+          </div>
+          <button
+            onClick={() => console.log({ user, token, userStats, fullUserData, API_URL })}
+            className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+          >
+            Log Debug Data
+          </button>
+        </div>
+      )}
     </div>
   );
 };
