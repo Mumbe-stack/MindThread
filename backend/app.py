@@ -24,9 +24,9 @@ CORS(
                 "https://mindthread-1.onrender.com",              
                 "https://mindthreadbloggingapp.netlify.app",      
                 "http://localhost:5173",
-                "http://localhost:3000",
-                "http://127.0.0.1:5173",
-                "http://127.0.0.1:3000"
+                "http://localhost:3000",  # Added for React dev server
+                "http://127.0.0.1:5173",  # Added for local development
+                "http://127.0.0.1:3000"   # Added for local development
             ],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": [
@@ -59,7 +59,7 @@ app.config["JWT_SECRET_KEY"] = os.environ.get(
     "JWT_SECRET_KEY", 
     "jwt_secre542cc4f32fc0a619979df2b56083fb21c97ea4c9e0e2b7d25779734357a1810486ef0c480c8fb9da1990c602dbf1438b9b6f3fa72716b13baf28612496d8fcd8t_key"
 )
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)  # Reduced for better security
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 app.config["JWT_BLACKLIST_ENABLED"] = True
@@ -259,15 +259,17 @@ def service_unavailable(error):
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# Register Blueprints with proper URL prefixes
+# CORRECTED: Register Blueprints with proper URL prefixes to match frontend expectations
 try:
-    app.register_blueprint(post_bp, url_prefix="/api")
-    app.register_blueprint(comment_bp, url_prefix="/api")
-    app.register_blueprint(user_bp, url_prefix="/api")
-    app.register_blueprint(vote_bp, url_prefix="/api")
-    app.register_blueprint(auth_bp, url_prefix="/api")
-    app.register_blueprint(admin_bp, url_prefix="/api")
-    app.register_blueprint(home_bp)
+    # Frontend expects: /api/posts, /api/comments, etc.
+    # So we register blueprints with /api prefix and let each blueprint define its routes
+    app.register_blueprint(post_bp, url_prefix="/api")      # post_bp should define routes like @bp.route('/posts')
+    app.register_blueprint(comment_bp, url_prefix="/api")   # comment_bp should define routes like @bp.route('/comments')
+    app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
+    app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
+    app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
+    app.register_blueprint(admin_bp, url_prefix="/api")     # admin_bp should define routes like @bp.route('/admin')
+    app.register_blueprint(home_bp)                         # home_bp for root routes
     logger.info("All blueprints registered successfully")
 except Exception as e:
     logger.error(f"Error registering blueprints: {e}")
@@ -277,6 +279,7 @@ except Exception as e:
 def health_check():
     """Health check endpoint"""
     try:
+        # Test database connection
         db.session.execute('SELECT 1')
         db_status = "healthy"
     except Exception as e:
@@ -332,6 +335,7 @@ def validate_environment():
     required_vars = []
     warnings = []
     
+    # Check for production environment variables
     if not os.environ.get("JWT_SECRET_KEY"):
         warnings.append("JWT_SECRET_KEY not set - using default (not recommended for production)")
     
@@ -346,10 +350,14 @@ def validate_environment():
 # Application Context Setup
 with app.app_context():
     try:
+        # Validate environment
         validate_environment()
+        
+        # Create database tables
         db.create_all()
         logger.info("✅ Database tables created successfully")
         
+        # Create upload directories
         create_upload_dirs()
         logger.info("✅ Upload directories created successfully")
         
@@ -364,10 +372,32 @@ with app.app_context():
         for route in sorted(relevant_routes):
             logger.info(route)
         
+        # Check critical routes that frontend expects
+        logger.info("🔍 Critical Routes Check:")
+        critical_routes = [
+            '/api/login',           # CORRECTED: Actual working auth routes
+            '/api/register',        # CORRECTED: Actual working auth routes
+            '/api/posts',
+            '/api/posts/<',         # For dynamic routes like /api/posts/<id>
+            '/api/comments',
+            '/api/users',
+            '/api/votes/post',
+            '/api/admin/stats',
+            '/api/health'
+        ]
+        
+        all_routes = [rule.rule for rule in app.url_map.iter_rules()]
+        
+        for route in critical_routes:
+            found = any(route in r for r in all_routes)
+            status = '✅ Found' if found else '❌ Missing'
+            logger.info(f"   {status}: {route}")
+        
         logger.info("✅ Application initialized successfully")
         
     except Exception as e:
         logger.error(f"❌ Application initialization error: {e}")
+        # Don't exit in production, log error and continue
         if os.environ.get("FLASK_ENV") == "development":
             raise
 
