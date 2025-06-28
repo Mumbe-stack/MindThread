@@ -772,7 +772,8 @@ def approve_post(post_id):
         current_app.logger.error(f"Error approving post: {e}")
         return jsonify({"error": f"Failed to update post approval status: {str(e)}"}), 500
 
-@admin_bp.route("/admin/posts/<int:post_id>/flag", methods=["PATCH"])
+@admin_bp.route('/posts/<int:post_id>/flag', methods=['PATCH'])
+@jwt_required()
 @admin_required
 def flag_post(post_id):
     """Flag or unflag a post"""
@@ -846,7 +847,8 @@ def approve_comment_admin(comment_id):
         current_app.logger.error(f"Error approving comment: {e}")
         return jsonify({"error": f"Failed to update comment approval status: {str(e)}"}), 500
 
-@admin_bp.route("/admin/comments/<int:comment_id>/flag", methods=["PATCH"])
+@admin_bp.route('/comments/<int:post_id>/flag', methods=['PATCH'])
+@jwt_required
 @admin_required
 def flag_comment_admin(comment_id):
     """Flag or unflag a comment (admin endpoint)"""
