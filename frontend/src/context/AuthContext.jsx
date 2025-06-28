@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login function - CORRECTED to use /api/login
+  // Login function - FIXED to handle actual server response format
   const login = async (credentials) => {
     try {
       setLoading(true);
@@ -131,9 +131,19 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        const { access_token, user: userData, message } = data;
+        // Handle the actual response format from your server
+        const { access_token, email, username, user_id, is_admin, is_active, message, success } = data;
         
-        if (access_token && userData) {
+        if (access_token && success) {
+          // Construct user object from the response data
+          const userData = {
+            id: user_id,
+            email: email,
+            username: username,
+            is_admin: is_admin || false,
+            is_active: is_active !== false, // default to true if not specified
+          };
+          
           setToken(access_token);
           setUser(userData);
           
@@ -163,7 +173,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register function - CORRECTED to use /api/register
+  // Register function - FIXED to handle actual server response format
   const register = async (userData) => {
     try {
       setLoading(true);
@@ -181,9 +191,19 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        const { access_token, user: newUser, message } = data;
+        // Handle the actual response format from your server
+        const { access_token, email, username, user_id, is_admin, is_active, message, success } = data;
         
-        if (access_token && newUser) {
+        if (access_token && success) {
+          // Construct user object from the response data
+          const newUser = {
+            id: user_id,
+            email: email,
+            username: username,
+            is_admin: is_admin || false,
+            is_active: is_active !== false,
+          };
+          
           setToken(access_token);
           setUser(newUser);
           
