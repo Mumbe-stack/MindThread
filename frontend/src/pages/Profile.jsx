@@ -10,51 +10,6 @@ const AvatarUploader = ({ onUploadSuccess }) => {
   const [isUploading, setIsUploading] = useState(false);
   const { token } = useAuth();
 
-  const handleApiResponse = async (response, errorMessage = "API request failed") => {
-    if (!response.ok) {
-      let errorText = errorMessage;
-      try {
-        const errorData = await response.json();
-        errorText = errorData.error || errorData.message || errorMessage;
-      } catch {
-        if (response.status === 404) {
-          errorText = `Endpoint not found: ${response.url}`;
-        } else if (response.status === 403) {
-          errorText = "Access denied";
-        } else if (response.status === 401) {
-          errorText = "Authentication required";
-        } else {
-          errorText = `${errorMessage} (${response.status})`;
-        }
-      }
-      throw new Error(errorText);
-    }
-
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Server returned non-JSON response");
-    }
-
-    return response.json();
-  };
-
-  const makeAuthenticatedRequest = async (url, options = {}) => {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          ...options.headers,
-        },
-        credentials: "include",
-      });
-      return response;
-    } catch (error) {
-      console.error("Network error:", error);
-      throw new Error("Network error. Please check your connection.");
-    }
-  };
-
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -81,17 +36,22 @@ const AvatarUploader = ({ onUploadSuccess }) => {
 
       console.log("Uploading avatar to:", `${API_URL}/api/users/me/avatar`);
 
-      const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me/avatar`, {
+      const response = await fetch(`${API_URL}/api/users/me/avatar`, {
         method: 'POST',
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        credentials: "include",
         body: formData,
       });
 
       if (response.ok) {
-        const result = await handleApiResponse(response, "Failed to upload avatar");
+        const result = await response.json();
         console.log("Avatar upload success:", result);
         
         toast.success('Avatar updated successfully!');
         
+        // Refresh profile data
         if (onUploadSuccess) {
           await onUploadSuccess();
         }
@@ -130,7 +90,7 @@ const AvatarUploader = ({ onUploadSuccess }) => {
 };
 
 const Profile = () => {
-  const { user, deleteUser, token, loading } = useAuth(); 
+  const { user, deleteUser, token, loading, updateProfile } = useAuth(); 
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
   const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
@@ -138,33 +98,19 @@ const Profile = () => {
   const [fullUserData, setFullUserData] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleApiResponse = async (response, errorMessage = "API request failed") => {
-    if (!response.ok) {
-      let errorText = errorMessage;
-      try {
-        const errorData = await response.json();
-        errorText = errorData.error || errorData.message || errorMessage;
-      } catch {
-        if (response.status === 404) {
-          errorText = `Endpoint not found: ${response.url}`;
-        } else if (response.status === 403) {
-          errorText = "Access denied";
-        } else if (response.status === 401) {
-          errorText = "Authentication required";
-        } else {
-          errorText = `${errorMessage} (${response.status})`;
-        }
-      }
-      throw new Error(errorText);
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!loading && !token && !user) {
+      navigate("/login");
     }
+  }, [token, loading, user, navigate]);
 
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Server returned non-JSON response");
+  // Fetch profile data when component mounts
+  useEffect(() => {
+    if (user && token) {
+      fetchFullUserProfile();
     }
-
-    return response.json();
-  };
+  }, [user, token]);
 
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
@@ -184,18 +130,6 @@ const Profile = () => {
     }
   };
 
-  useEffect(() => {
-    if (!loading && !token && !user) {
-      navigate("/login");
-    }
-  }, [token, loading, user, navigate]);
-
-  useEffect(() => {
-    if (user && token) {
-      fetchFullUserProfile();
-    }
-  }, [user, token]);
-
   const fetchFullUserProfile = async () => {
     if (!token) return;
     
@@ -205,32 +139,38 @@ const Profile = () => {
       console.log("Fetching user profile from:", `${API_URL}/api/users/me`);
       
       const response = await makeAuthenticatedRequest(`${API_URL}/api/users/me`);
-      const userData = await handleApiResponse(response, "Failed to load profile data");
       
-      console.log("User data received:", userData);
-      setFullUserData(userData);
-      
-      // Extract stats from the response - aligned with backend structure
-      if (userData.stats) {
-        setUserStats({
-          posts: userData.stats.posts_count || 0,
-          comments: userData.stats.comments_count || 0,
-          votes: userData.stats.votes_count || 0,
-        });
-      } else {
-        // Fallback to direct properties if stats object doesn't exist
-        setUserStats({
-          posts: userData.post_count || userData.posts_count || 0,
-          comments: userData.comment_count || userData.comments_count || 0,
-          votes: userData.vote_count || userData.votes_count || 0,
-        });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch profile: ${response.status}`);
       }
 
-      console.log("Stats extracted:", {
-        posts: userData.stats?.posts_count || userData.post_count || 0,
-        comments: userData.stats?.comments_count || userData.comment_count || 0,
-        votes: userData.stats?.votes_count || userData.vote_count || 0
-      });
+      const userData = await response.json();
+      console.log("User data received:", userData);
+      
+      setFullUserData(userData);
+      
+      // Extract stats from the response - try multiple possible structures
+      let posts = 0, comments = 0, votes = 0;
+      
+      if (userData.stats) {
+        posts = userData.stats.posts_count || userData.stats.post_count || 0;
+        comments = userData.stats.comments_count || userData.stats.comment_count || 0;
+        votes = userData.stats.votes_count || userData.stats.vote_count || 0;
+      } else {
+        // Fallback to direct properties
+        posts = userData.post_count || userData.posts_count || 0;
+        comments = userData.comment_count || userData.comments_count || 0;
+        votes = userData.vote_count || userData.votes_count || 0;
+      }
+
+      setUserStats({ posts, comments, votes });
+      
+      console.log("Stats extracted:", { posts, comments, votes });
+
+      // Update auth context with fresh user data if needed
+      if (updateProfile) {
+        updateProfile(userData);
+      }
 
     } catch (error) {
       console.error("Profile data fetch error:", error);
@@ -338,6 +278,9 @@ This will permanently delete:
     );
   }
 
+  // Get the avatar URL from either fullUserData or user
+  const avatarUrl = fullUserData?.avatar_url || user?.avatar_url;
+
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg mt-10">
       <div className="flex justify-between items-center mb-8">
@@ -360,19 +303,22 @@ This will permanently delete:
           {/* Avatar Display (no upload functionality here) */}
           <div className="relative">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg">
-              {fullUserData?.avatar_url || user?.avatar_url ? (
+              {avatarUrl ? (
                 <img 
-                  src={fullUserData?.avatar_url || user?.avatar_url} 
+                  src={avatarUrl.startsWith('http') ? avatarUrl : `${API_URL}${avatarUrl}`}
                   alt="Profile" 
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    console.log("Avatar image failed to load");
+                    console.log("Avatar image failed to load:", avatarUrl);
                     e.target.style.display = 'none';
                     e.target.nextElementSibling.style.display = 'flex';
                   }}
                 />
               ) : null}
-              <div className="w-full h-full flex items-center justify-center text-gray-400" style={{ display: fullUserData?.avatar_url || user?.avatar_url ? 'none' : 'flex' }}>
+              <div 
+                className="w-full h-full flex items-center justify-center text-gray-400" 
+                style={{ display: avatarUrl ? 'none' : 'flex' }}
+              >
                 <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                 </svg>
@@ -423,11 +369,13 @@ This will permanently delete:
           <div className="space-y-1">
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
             <p className="text-lg text-gray-900">
-              {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              }) : 'Recently joined'}
+              {user.created_at ? (() => {
+                const date = new Date(user.created_at);
+                const day = date.getDate();
+                const month = date.getMonth() + 1; // getMonth() returns 0-11
+                const year = date.getFullYear();
+                return `${day}/${month}/${year}`;
+              })() : 'Recently joined'}
             </p>
             <p className="text-sm text-gray-500">
               {user.created_at ? `${Math.floor((new Date() - new Date(user.created_at)) / (1000 * 60 * 60 * 24))} days ago` : ''}
@@ -631,9 +579,10 @@ This will permanently delete:
             <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
             <div>Loading: {loading ? "🔄" : "✅"}</div>
             <div>Stats: P:{userStats.posts} C:{userStats.comments} V:{userStats.votes}</div>
+            <div>Avatar: {avatarUrl ? "✅" : "❌"}</div>
           </div>
           <button
-            onClick={() => console.log({ user, token, userStats, fullUserData, API_URL })}
+            onClick={() => console.log({ user, token, userStats, fullUserData, avatarUrl, API_URL })}
             className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
           >
             Log Debug Data
