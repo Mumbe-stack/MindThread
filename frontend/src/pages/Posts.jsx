@@ -4,7 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import LikeButton from "../components/LikeButton";
 import toast from "react-hot-toast";
 
-const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
+const VITE_API_URL =
+  import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const Posts = () => {
   const { user, token } = useAuth();
@@ -53,18 +54,20 @@ const Posts = () => {
 
   const fetchPostVotes = async (postId) => {
     try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/post/${postId}/score`);
+      const res = await fetch(
+        `${VITE_API_URL}/api/votes/post/${postId}/score`
+      );
       if (res.ok) {
         const data = await res.json();
-        setPosts(prev =>
-          prev.map(post =>
+        setPosts((prev) =>
+          prev.map((post) =>
             post.id === postId
               ? {
                   ...post,
                   vote_score: data.score,
                   upvotes: data.upvotes,
                   downvotes: data.downvotes,
-                  total_votes: data.total_votes
+                  total_votes: data.total_votes,
                 }
               : post
           )
@@ -83,7 +86,7 @@ const Posts = () => {
 
     if (votesLoading[postId]) return;
 
-    setVotesLoading(prev => ({ ...prev, [postId]: true }));
+    setVotesLoading((prev) => ({ ...prev, [postId]: true }));
 
     try {
       const res = await fetch(`${VITE_API_URL}/api/votes/post`, {
@@ -97,20 +100,22 @@ const Posts = () => {
 
       if (res.ok) {
         const data = await res.json();
-        setPosts(prev =>
-          prev.map(post =>
+        setPosts((prev) =>
+          prev.map((post) =>
             post.id === postId
               ? {
                   ...post,
                   vote_score: data.score,
                   upvotes: data.upvotes,
                   downvotes: data.downvotes,
-                  userVote: data.user_vote
+                  userVote: data.user_vote,
                 }
               : post
           )
         );
-        toast.success(data.message || (value === 1 ? "Upvoted" : "Downvoted"));
+        toast.success(
+          data.message || (value === 1 ? "Upvoted" : "Downvoted")
+        );
       } else {
         const errorData = await res.json();
         toast.error(errorData.error || "Failed to vote");
@@ -119,7 +124,7 @@ const Posts = () => {
       console.error("Error voting:", error);
       toast.error("Network error while voting");
     } finally {
-      setVotesLoading(prev => ({ ...prev, [postId]: false }));
+      setVotesLoading((prev) => ({ ...prev, [postId]: false }));
     }
   };
 
@@ -128,23 +133,32 @@ const Posts = () => {
       toast.error("You must be logged in to flag a post");
       return;
     }
+    if (!user.is_admin) {
+      toast.error("Only admins can flag or unflag posts");
+      return;
+    }
 
     try {
-      const res = await fetch(`${VITE_API_URL}/api/posts/${postId}/flag`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ is_flagged: isFlagged })
-      });
+      const res = await fetch(
+        `${VITE_API_URL}/api/admin/posts/${postId}/flag`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ is_flagged: isFlagged }),
+        }
+      );
 
       const data = await res.json();
 
       if (res.ok) {
-        toast.success(data.message || (isFlagged ? "Post flagged" : "Post unflagged"));
-        setPosts(prev =>
-          prev.map(post =>
+        toast.success(
+          data.message || (isFlagged ? "Post flagged" : "Post unflagged")
+        );
+        setPosts((prev) =>
+          prev.map((post) =>
             post.id === postId ? { ...post, is_flagged: isFlagged } : post
           )
         );
@@ -159,6 +173,7 @@ const Posts = () => {
 
   const VoteButtons = ({ post }) => (
     <div className="flex flex-col items-center space-y-1 mr-3">
+      {/* Upvote */}
       <button
         onClick={(e) => {
           e.preventDefault();
@@ -173,23 +188,38 @@ const Posts = () => {
         } ${!user ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
         title={user ? "Upvote" : "Login to vote"}
       >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+        <svg
+          className="w-4 h-4"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path
+            fillRule="evenodd"
+            d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z"
+            clipRule="evenodd"
+          />
         </svg>
       </button>
 
+      {/* Score */}
       <div className="text-center">
-        <span className={`font-bold text-sm ${
-          (post.vote_score || 0) > 0 ? "text-green-600" :
-          (post.vote_score || 0) < 0 ? "text-red-600" : "text-gray-600"
-        }`}>
-          {post.vote_score || 0}
+        <span
+          className={`font-bold text-sm ${
+            post.vote_score > 0
+              ? "text-green-600"
+              : post.vote_score < 0
+              ? "text-red-600"
+              : "text-gray-600"
+          }`}
+        >
+          {post.vote_score}
         </span>
         <div className="text-xs text-gray-500">
-          {post.upvotes || 0}↑ {post.downvotes || 0}↓
+          {post.upvotes}↑ {post.downvotes}↓
         </div>
       </div>
 
+      {/* Downvote */}
       <button
         onClick={(e) => {
           e.preventDefault();
@@ -204,8 +234,16 @@ const Posts = () => {
         } ${!user ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
         title={user ? "Downvote" : "Login to vote"}
       >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        <svg
+          className="w-4 h-4"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path
+            fillRule="evenodd"
+            d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z"
+            clipRule="evenodd"
+          />
         </svg>
       </button>
 
@@ -234,7 +272,10 @@ const Posts = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-indigo-800">All Posts</h1>
         {user && (
-          <Link to="/posts/new" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+          <Link
+            to="/posts/new"
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
             Create New Post
           </Link>
         )}
@@ -257,19 +298,28 @@ const Posts = () => {
         <div className="text-center py-12">
           <div className="text-gray-500 text-xl mb-4">No posts available</div>
           {user ? (
-            <Link to="/posts/new" className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors">
+            <Link
+              to="/posts/new"
+              className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+            >
               Create the first post!
             </Link>
           ) : (
             <p className="text-gray-600">
-              <Link to="/login" className="text-indigo-600 hover:underline">Login</Link> to create posts
+              <Link to="/login" className="text-indigo-600 hover:underline">
+                Login
+              </Link>{" "}
+              to create posts
             </p>
           )}
         </div>
       ) : (
         <div className="grid gap-4">
           {posts.map((post) => (
-            <div key={post.id} className="border rounded shadow hover:shadow-md transition bg-white">
+            <div
+              key={post.id}
+              className="border rounded shadow hover:shadow-md transition bg-white"
+            >
               <div className="p-4 flex space-x-3">
                 <VoteButtons post={post} />
                 <div className="flex-1">
@@ -283,25 +333,34 @@ const Posts = () => {
                       )}
                     </h2>
                     <p className="text-gray-600 mt-1 mb-3">
-                      {post.content?.length > 120 ? `${post.content.slice(0, 120)}...` : post.content}
+                      {post.content?.length > 120
+                        ? `${post.content.slice(0, 120)}...`
+                        : post.content}
                     </p>
                   </Link>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <span>By User #{post.user_id}</span>
-                      <span>{new Date(post.created_at).toLocaleDateString()}</span>
+                      <span>
+                        {new Date(post.created_at).toLocaleDateString()}
+                      </span>
                       {post.total_votes > 0 && (
                         <span className="text-indigo-600 font-medium">
-                          {post.total_votes} vote{post.total_votes !== 1 ? 's' : ''}
+                          {post.total_votes} vote
+                          {post.total_votes !== 1 ? "s" : ""}
                         </span>
                       )}
                     </div>
-
                     <div className="flex items-center space-x-3">
                       <LikeButton type="post" id={post.id} />
                       {user?.id === post.user_id && (
                         <div className="flex items-center space-x-2">
-                          <Link to={`/posts/${post.id}/edit`} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">Edit</Link>
+                          <Link
+                            to={`/posts/${post.id}/edit`}
+                            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                          >
+                            Edit
+                          </Link>
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -315,25 +374,27 @@ const Posts = () => {
                           </button>
                         </div>
                       )}
-                      {user?.is_admin && user?.id !== post.user_id && (
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              const confirm = window.confirm(
-                                post.is_flagged ? "Unflag this post?" : "Flag this post as inappropriate?"
-                              );
-                              if (confirm) handleFlagPost(post.id, !post.is_flagged);
-                            }}
-                            className={`text-xs px-2 py-1 rounded ${
+                      {user?.is_admin && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const confirm = window.confirm(
                               post.is_flagged
-                                ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
-                                : "bg-gray-100 text-gray-700 hover:bg-yellow-50"
-                            }`}
-                          >
-                            {post.is_flagged ? "Unflag" : "Flag"}
-                          </button>
-                        </div>
+                                ? "Unflag this post?"
+                                : "Flag this post as inappropriate?"
+                            );
+                            if (confirm)
+                              handleFlagPost(post.id, !post.is_flagged);
+                          }}
+                          className={`text-xs px-2 py-1 rounded ${
+                            post.is_flagged
+                              ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          {post.is_flagged ? "Unflag" : "Flag"}
+                        </button>
                       )}
                     </div>
                   </div>

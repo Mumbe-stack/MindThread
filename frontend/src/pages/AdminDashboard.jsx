@@ -461,14 +461,13 @@ const AdminDashboard = () => {
       let method = "PATCH";
       let body = null;
 
-      // 🔧 FIXED: Use admin endpoints for flag and approve actions
       switch (action) {
         case "approve":
-          endpoint = `${VITE_API_URL}/api//${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: true });
           break;
         case "reject":
-          endpoint = `${VITE_API_URL}/api//${type}s/${id}/approve`;
+          endpoint = `${VITE_API_URL}/api/${type}s/${id}/approve`;
           body = JSON.stringify({ is_approved: false });
           break;
         case "flag":

@@ -12,7 +12,7 @@ import AddPost from "./pages/AddPost";
 import EditPost from "./pages/EditPost";
 import SinglePost from "./pages/SinglePost";
 import AdminDashboard from "./pages/AdminDashboard";
-import NotFound from "./pages/NotFound";
+import Comment from "./pages/Comments";
 
 function App() {
   const { user } = useAuth();
