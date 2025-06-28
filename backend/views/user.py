@@ -501,7 +501,7 @@ def delete_user(user_id):
         current_app.logger.error(f"Failed to delete user {user_id}: {e}")
         return jsonify({"error": "Failed to delete user"}), 500
 
-@user_bp.route("/users/<int:user_id>/block", methods=["POST"])
+@user_bp.route("/users/<int:user_id>/block", methods=["PATCH"])
 @jwt_required()
 def block_user(user_id):
     """Block user (admin only)"""

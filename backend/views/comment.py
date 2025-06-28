@@ -114,6 +114,35 @@ def list_comments():
         current_app.logger.error(f"Error fetching comments: {e}")
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch comments: {str(e)}"}), 500
+    
+    
+@comment_bp.route("/", methods=["GET"])
+@jwt_required()
+def get_comments():
+    identity = get_jwt_identity()
+    user = User.query.get(identity)
+
+    post_id = request.args.get("post_id", type=int)
+    user_id = request.args.get("user_id", type=int)
+
+    # Allow admins to fetch all comments
+    if user and user.is_admin and not post_id and not user_id:
+        comments = Comment.query.order_by(Comment.created_at.desc()).all()
+        return jsonify([c.to_dict() for c in comments]), 200
+
+    # Regular users must use post_id or user_id
+    if not post_id and not user_id:
+        return jsonify({"error": "post_id or user_id parameter is required"}), 400
+
+    query = Comment.query
+    if post_id:
+        query = query.filter_by(post_id=post_id)
+    if user_id:
+        query = query.filter_by(user_id=user_id)
+
+    comments = query.order_by(Comment.created_at.desc()).all()
+    return jsonify([c.to_dict() for c in comments]), 200
+
 
 @comment_bp.route("/comments", methods=["POST"])
 @jwt_required()
