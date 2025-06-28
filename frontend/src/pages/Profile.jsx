@@ -418,13 +418,20 @@ This will permanently delete:
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div className="space-y-1">
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Member Since</label>
-            <p className="text-lg text-gray-900">
-              {user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+            <p className="text-base font-mono text-gray-800">
+              {user.created_at
+                ? new Date(user.created_at).toLocaleString('en-US', {
                 year: 'numeric',
                 month: 'long',
-                day: 'numeric'
-              }) : 'Recently joined'}
-            </p>
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+      })
+    : 'Recently joined'}
+</p>
           </div>
           <div className="space-y-1">
             <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Account Type</label>

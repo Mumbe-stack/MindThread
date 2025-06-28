@@ -7,7 +7,8 @@ from flask_migrate import Migrate
 from flask_mail import Mail
 from flask_jwt_extended import JWTManager
 from models import db, TokenBlocklist
-from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp, admin_bp
+from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp
+from views.admin import admin_bp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
