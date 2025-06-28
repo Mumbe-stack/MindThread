@@ -602,6 +602,353 @@ def bulk_approve_comments():
         current_app.logger.error(f"Error in bulk approve comments: {e}")
         return jsonify({"error": "Failed to bulk approve comments"}), 500
 
+# ADD THESE ENDPOINTS TO YOUR backend/views/admin.py FILE
+# Place them after the existing endpoints, before the health check
+
+@admin_bp.route("/admin/posts", methods=["GET"])
+@admin_required
+def get_all_posts():
+    """Get all posts with enhanced information for admin"""
+    try:
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        
+        # Get search parameter
+        search = request.args.get('search', '').strip()
+        
+        # Build query
+        query = Post.query
+        if search:
+            query = query.filter(
+                or_(
+                    Post.title.ilike(f'%{search}%'),
+                    Post.content.ilike(f'%{search}%')
+                )
+            )
+        
+        # Order by creation date (newest first)
+        query = query.order_by(Post.created_at.desc())
+        
+        # Paginate if requested, otherwise get all
+        if request.args.get('paginate', 'false').lower() == 'true':
+            posts_pagination = query.paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            posts = posts_pagination.items
+        else:
+            posts = query.all()
+        
+        posts_data = []
+        for post in posts:
+            try:
+                post_dict = post.to_dict(include_author=True)
+                # Add extra stats for each post
+                post_dict.update({
+                    "comments_count": post.comments.count(),
+                    "likes_count": getattr(post, 'likes_count', 0),
+                    "vote_score": getattr(post, 'vote_score', 0),
+                    "upvotes_count": getattr(post, 'upvotes_count', 0),
+                    "downvotes_count": getattr(post, 'downvotes_count', 0)
+                })
+                
+                # Add approval/flag status if available
+                if hasattr(Post, 'is_approved'):
+                    post_dict["is_approved"] = post.is_approved
+                if hasattr(Post, 'is_flagged'):
+                    post_dict["is_flagged"] = post.is_flagged
+                    
+            except Exception as e:
+                current_app.logger.warning(f"Error adding post stats for post {post.id}: {e}")
+                # Fallback to basic dict
+                post_dict = {
+                    "id": post.id,
+                    "title": post.title,
+                    "content": post.content,
+                    "created_at": post.created_at.isoformat(),
+                    "user_id": post.user_id,
+                    "author": {
+                        "id": post.user_id,
+                        "username": post.user.username if post.user else "Unknown"
+                    }
+                }
+                
+            posts_data.append(post_dict)
+        
+        # Return with or without pagination info
+        if request.args.get('paginate', 'false').lower() == 'true':
+            return jsonify({
+                "posts": posts_data,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": posts_pagination.total,
+                    "pages": posts_pagination.pages,
+                    "has_prev": posts_pagination.has_prev,
+                    "has_next": posts_pagination.has_next
+                }
+            }), 200
+        else:
+            return jsonify(posts_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching admin posts: {e}")
+        return jsonify({"error": "Failed to fetch posts"}), 500
+
+@admin_bp.route("/admin/comments", methods=["GET"])
+@admin_required
+def get_all_comments():
+    """Get all comments with enhanced information for admin"""
+    try:
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 50, type=int), 200)
+        
+        # Get search parameter
+        search = request.args.get('search', '').strip()
+        
+        # Get post filter
+        post_id = request.args.get('post_id', type=int)
+        user_id = request.args.get('user_id', type=int)
+        
+        # Build query
+        query = Comment.query
+        
+        if search:
+            query = query.filter(Comment.content.ilike(f'%{search}%'))
+        
+        if post_id:
+            query = query.filter_by(post_id=post_id)
+            
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+        
+        # Order by creation date (newest first)
+        query = query.order_by(Comment.created_at.desc())
+        
+        # Paginate if requested, otherwise get all
+        if request.args.get('paginate', 'false').lower() == 'true':
+            comments_pagination = query.paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            comments = comments_pagination.items
+        else:
+            comments = query.all()
+        
+        comments_data = []
+        for comment in comments:
+            try:
+                comment_dict = comment.to_dict(include_author=True)
+                # Add extra information
+                comment_dict.update({
+                    "post_title": comment.post.title if comment.post else "Unknown Post",
+                    "likes_count": getattr(comment, 'likes_count', 0),
+                    "vote_score": getattr(comment, 'vote_score', 0),
+                    "upvotes_count": getattr(comment, 'upvotes_count', 0),
+                    "downvotes_count": getattr(comment, 'downvotes_count', 0)
+                })
+                
+                # Add approval/flag status if available
+                if hasattr(Comment, 'is_approved'):
+                    comment_dict["is_approved"] = comment.is_approved
+                if hasattr(Comment, 'is_flagged'):
+                    comment_dict["is_flagged"] = comment.is_flagged
+                    
+            except Exception as e:
+                current_app.logger.warning(f"Error adding comment stats for comment {comment.id}: {e}")
+                # Fallback to basic dict
+                comment_dict = {
+                    "id": comment.id,
+                    "content": comment.content,
+                    "created_at": comment.created_at.isoformat(),
+                    "post_id": comment.post_id,
+                    "user_id": comment.user_id,
+                    "author": {
+                        "id": comment.user_id,
+                        "username": comment.user.username if comment.user else "Unknown"
+                    }
+                }
+                
+            comments_data.append(comment_dict)
+        
+        # Return with or without pagination info
+        if request.args.get('paginate', 'false').lower() == 'true':
+            return jsonify({
+                "comments": comments_data,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": comments_pagination.total,
+                    "pages": comments_pagination.pages,
+                    "has_prev": comments_pagination.has_prev,
+                    "has_next": comments_pagination.has_next
+                }
+            }), 200
+        else:
+            return jsonify(comments_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching admin comments: {e}")
+        return jsonify({"error": "Failed to fetch comments"}), 500
+
+@admin_bp.route("/admin/all-comments", methods=["GET"])
+@admin_required  
+def get_all_comments_simple():
+    """Simple endpoint to get all comments (alternative route)"""
+    try:
+        comments = Comment.query.order_by(Comment.created_at.desc()).all()
+        comments_data = []
+        
+        for comment in comments:
+            try:
+                comment_dict = comment.to_dict(include_author=True)
+                comments_data.append(comment_dict)
+            except Exception as e:
+                # Fallback to basic dict if to_dict fails
+                comment_dict = {
+                    "id": comment.id,
+                    "content": comment.content,
+                    "created_at": comment.created_at.isoformat(),
+                    "post_id": comment.post_id,
+                    "user_id": comment.user_id,
+                    "author": {
+                        "id": comment.user_id,
+                        "username": comment.user.username if comment.user else "Unknown"
+                    }
+                }
+                comments_data.append(comment_dict)
+        
+        return jsonify(comments_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching all comments: {e}")
+        return jsonify({"error": "Failed to fetch comments"}), 500
+
+# Content management endpoints
+@admin_bp.route("/admin/posts/<int:post_id>/approve", methods=["PATCH"])
+@admin_required
+def approve_post(post_id):
+    """Approve or disapprove a post"""
+    try:
+        post = Post.query.get_or_404(post_id)
+        
+        data = request.get_json() or {}
+        if "is_approved" in data:
+            post.is_approved = bool(data["is_approved"])
+        else:
+            post.is_approved = not getattr(post, 'is_approved', True)
+
+        if hasattr(post, 'updated_at'):
+            post.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        action = "approved" if post.is_approved else "disapproved"
+        current_app.logger.info(f"Post {post.id} {action} by admin")
+
+        return jsonify({
+            "success": True,
+            "message": f"Post {action} successfully",
+            "is_approved": post.is_approved
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error approving post: {e}")
+        return jsonify({"error": "Failed to update post approval status"}), 500
+
+@admin_bp.route("/admin/posts/<int:post_id>/flag", methods=["PATCH"])
+@admin_required
+def flag_post(post_id):
+    """Flag or unflag a post"""
+    try:
+        post = Post.query.get_or_404(post_id)
+        
+        data = request.get_json() or {}
+        if "is_flagged" in data:
+            post.is_flagged = bool(data["is_flagged"])
+        else:
+            post.is_flagged = not getattr(post, 'is_flagged', False)
+
+        if hasattr(post, 'updated_at'):
+            post.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        action = "flagged" if post.is_flagged else "unflagged"
+        current_app.logger.info(f"Post {post.id} {action} by admin")
+
+        return jsonify({
+            "success": True,
+            "message": f"Post {action} successfully",
+            "is_flagged": post.is_flagged
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error flagging post: {e}")
+        return jsonify({"error": "Failed to update post flag status"}), 500
+
+@admin_bp.route("/admin/comments/<int:comment_id>/approve", methods=["PATCH"])
+@admin_required
+def approve_comment_admin(comment_id):
+    """Approve or disapprove a comment (admin endpoint)"""
+    try:
+        comment = Comment.query.get_or_404(comment_id)
+        
+        data = request.get_json() or {}
+        if "is_approved" in data:
+            comment.is_approved = bool(data["is_approved"])
+        else:
+            comment.is_approved = not getattr(comment, 'is_approved', True)
+
+        if hasattr(comment, 'updated_at'):
+            comment.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        action = "approved" if comment.is_approved else "disapproved"
+        current_app.logger.info(f"Comment {comment.id} {action} by admin")
+
+        return jsonify({
+            "success": True,
+            "message": f"Comment {action} successfully",
+            "is_approved": comment.is_approved
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error approving comment: {e}")
+        return jsonify({"error": "Failed to update comment approval status"}), 500
+
+@admin_bp.route("/admin/comments/<int:comment_id>/flag", methods=["PATCH"])
+@admin_required
+def flag_comment_admin(comment_id):
+    """Flag or unflag a comment (admin endpoint)"""
+    try:
+        comment = Comment.query.get_or_404(comment_id)
+        
+        data = request.get_json() or {}
+        if "is_flagged" in data:
+            comment.is_flagged = bool(data["is_flagged"])
+        else:
+            comment.is_flagged = not getattr(comment, 'is_flagged', False)
+
+        if hasattr(comment, 'updated_at'):
+            comment.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        action = "flagged" if comment.is_flagged else "unflagged"
+        current_app.logger.info(f"Comment {comment.id} {action} by admin")
+
+        return jsonify({
+            "success": True,
+            "message": f"Comment {action} successfully",
+            "is_flagged": comment.is_flagged
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error flagging comment: {e}")
+        return jsonify({"error": "Failed to update comment flag status"}), 500
+    
 # Health check for admin service
 @admin_bp.route("/admin/health", methods=["GET"])
 @admin_required

@@ -27,13 +27,12 @@ comment_bp = Blueprint('comments', __name__)
 
 @comment_bp.route("/comments", methods=["GET"])
 def list_comments():
-    """Get comments for a specific post or user - only approved comments for non-admins"""
+    """Get comments for a specific post or user - ADMINS can get all comments"""
     try:
         post_id = request.args.get("post_id")
         user_id = request.args.get("user_id")
-
-        if not post_id and not user_id:
-            return jsonify({"error": "post_id or user_id parameter is required"}), 400
+        all_comments = request.args.get("all", "").lower() == "true"
+        admin_mode = request.args.get("admin", "").lower() == "true"
 
         # Get current user
         current_user_id = None
@@ -46,7 +45,46 @@ def list_comments():
         except:
             pass
 
-        # Build query
+        # ✅ FIXED: Allow admins to get all comments without parameters
+        if current_user and current_user.is_admin and (all_comments or admin_mode or (not post_id and not user_id)):
+            # Admin can get all comments
+            comments = Comment.query.order_by(Comment.created_at.desc()).all()
+            comments_data = []
+            
+            for c in comments:
+                try:
+                    comment_data = c.to_dict(include_author=True) if hasattr(c, 'to_dict') else {
+                        "id": c.id,
+                        "content": c.content,
+                        "post_id": c.post_id,
+                        "user_id": c.user_id,
+                        "author": {
+                            "id": c.user_id,
+                            "username": c.user.username if c.user else "Unknown User"
+                        },
+                        "parent_id": c.parent_id,
+                        "created_at": c.created_at.isoformat() if c.created_at else datetime.now(timezone.utc).isoformat(),
+                        "updated_at": c.updated_at.isoformat() if hasattr(c, 'updated_at') and c.updated_at else None,
+                        "likes_count": getattr(c, 'likes_count', 0),
+                        "vote_score": getattr(c, 'vote_score', 0),
+                        "upvotes_count": getattr(c, 'upvotes_count', 0),
+                        "downvotes_count": getattr(c, 'downvotes_count', 0),
+                        "total_votes": getattr(c, 'total_votes', 0),
+                        "is_approved": getattr(c, 'is_approved', True),
+                        "is_flagged": getattr(c, 'is_flagged', False)
+                    }
+                    comments_data.append(comment_data)
+                except Exception as e:
+                    current_app.logger.warning(f"Error processing comment {c.id}: {e}")
+                    continue
+            
+            return jsonify(comments_data), 200
+
+        # 🚫 Non-admins need post_id or user_id
+        if not post_id and not user_id:
+            return jsonify({"error": "post_id or user_id parameter is required"}), 400
+
+        # Build query for specific post or user
         query = Comment.query
         if post_id:
             try:
@@ -96,13 +134,13 @@ def list_comments():
                 "parent_id": c.parent_id,
                 "created_at": c.created_at.isoformat() if c.created_at else datetime.now(timezone.utc).isoformat(),
                 "updated_at": c.updated_at.isoformat() if hasattr(c, 'updated_at') and c.updated_at else None,
-                "likes_count": c.likes_count,
-                "vote_score": c.vote_score,
-                "upvotes_count": c.upvotes_count,
-                "downvotes_count": c.downvotes_count,
-                "total_votes": c.total_votes,
-                "is_approved": c.is_approved,
-                "is_flagged": c.is_flagged,
+                "likes_count": getattr(c, 'likes_count', 0),
+                "vote_score": getattr(c, 'vote_score', 0),
+                "upvotes_count": getattr(c, 'upvotes_count', 0),
+                "downvotes_count": getattr(c, 'downvotes_count', 0),
+                "total_votes": getattr(c, 'total_votes', 0),
+                "is_approved": getattr(c, 'is_approved', True),
+                "is_flagged": getattr(c, 'is_flagged', False),
                 "user_vote": user_vote,
                 "user_liked": user_liked
             }
