@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"; 
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import CommentBox from "../components/CommentBox";
+import VoteButton from "../components/VoteButton";
+import LikeButton from "../components/LikeButton";
 import toast from "react-hot-toast";
 
-const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
+const API = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const SinglePost = () => {
   const { id } = useParams();
@@ -20,524 +22,273 @@ const SinglePost = () => {
   const [adminVotesVisible, setAdminVotesVisible] = useState(false);
   const [adminVotes, setAdminVotes] = useState([]);
 
+  /* Fetch post and comments on mount */
+  useEffect(() => {
+    fetchPost();
+    fetchComments();
+  }, [id]);
+
   const fetchPost = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
+      const res = await fetch(`${API}/api/posts/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to fetch post");
+      if (!res.ok) throw new Error("Failed to load post");
       const data = await res.json();
       setPost(data);
-      // Fetch vote data for the post
-      await fetchPostVotes(data.id);
     } catch (err) {
-      toast.error("Could not load post");
       setError(err.message);
+      toast.error("Could not load post");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchPostVotes = async (postId) => {
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/post/${postId}/score`);
-      if (res.ok) {
-        const data = await res.json();
-        setPost(prev => ({
-          ...prev,
-          vote_score: data.score,
-          upvotes: data.upvotes,
-          downvotes: data.downvotes,
-          total_votes: data.total_votes
-        }));
-      }
-    } catch (error) {
-      console.error("Error fetching post votes:", error);
-    }
-  };
-
   const fetchComments = async () => {
+    setCommentsLoading(true);
     try {
-      setCommentsLoading(true);
-     
-      const headers = {
-        "Content-Type": "application/json"
-      };
-      
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-      
-      const res = await fetch(`${VITE_API_URL}/api/comments?post_id=${id}`, {
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(`${API}/api/posts/${id}`, {
         headers,
         credentials: "include",
       });
-      
-      if (!res.ok) {
-        throw new Error(`Failed to fetch comments: ${res.status}`);
-      }
-      
+      if (!res.ok) throw new Error("Failed to load comments");
       const data = await res.json();
-      const commentsArray = Array.isArray(data) ? data : [];
-      setComments(commentsArray);
-      
-      // Fetch vote scores for each comment
-      commentsArray.forEach(comment => fetchCommentVotes(comment.id));
-    } catch (err) {
+      setComments(data.comments || []);
+    } catch {
       setComments([]);
     } finally {
       setCommentsLoading(false);
     }
   };
 
-  const fetchCommentVotes = async (commentId) => {
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/comment/${commentId}/score`);
-      if (res.ok) {
-        const data = await res.json();
-        setComments(prev => prev.map(comment => 
-          comment.id === commentId 
-            ? { 
-                ...comment, 
-                vote_score: data.score, 
-                upvotes: data.upvotes, 
-                downvotes: data.downvotes,
-                total_votes: data.total_votes
-              }
-            : comment
-        ));
-      }
-    } catch (error) {
-      console.error("Error fetching comment votes:", error);
-    }
-  };
-
-  const refreshComments = async () => {
-    await fetchComments();
-  };
-
-  useEffect(() => {
-    if (id) {
-      fetchPost();
-      fetchComments();
-    }
-  }, [id]); 
-
-  // NEW: Vote on post
-  const handlePostVote = async (value) => {
-    if (!user || !token) {
-      toast.error("Please login to vote");
+  /* Voting helpers */
+  const handleVote = async ({ type, itemId, value }) => {
+    if (!user) {
+      toast.error("Login to vote");
       return;
     }
-
-    if (votesLoading.post) return;
-
-    setVotesLoading(prev => ({ ...prev, post: true }));
+    const key = type === "post" ? "post" : `comment_${itemId}`;
+    if (votesLoading[key]) return;
+    setVotesLoading(v => ({ ...v, [key]: true }));
 
     try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/post`, {
+      const res = await fetch(`${API}/api/votes/${type}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          post_id: post.id,
-          value: value,
-        }),
+        body: JSON.stringify(
+          type === "post" ? { post_id: itemId, value } : { comment_id: itemId, value }
+        ),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Vote failed");
 
-      if (res.ok) {
-        const data = await res.json();
-        setPost(prev => ({
-          ...prev,
-          vote_score: data.score,
+      if (type === "post") {
+        setPost(p => ({ ...p,
+          vote_score: data.vote_score,
           upvotes: data.upvotes,
           downvotes: data.downvotes,
-          userVote: data.user_vote
+          user_vote: data.user_vote
         }));
-        
-        if (data.message === "Vote removed") {
-          toast.success("Vote removed");
-        } else {
-          toast.success(`${value === 1 ? "Upvoted" : "Downvoted"}`);
-        }
       } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Failed to vote");
-      }
-    } catch (error) {
-      console.error("Error voting on post:", error);
-      toast.error("Network error while voting");
-    } finally {
-      setVotesLoading(prev => ({ ...prev, post: false }));
-    }
-  };
-
-  // NEW: Vote on comment
-  const handleCommentVote = async (commentId, value) => {
-    if (!user || !token) {
-      toast.error("Please login to vote");
-      return;
-    }
-
-    if (votesLoading[`comment_${commentId}`]) return;
-
-    setVotesLoading(prev => ({ ...prev, [`comment_${commentId}`]: true }));
-
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/comment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          comment_id: commentId,
-          value: value,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setComments(prev => prev.map(comment => 
-          comment.id === commentId 
-            ? { 
-                ...comment, 
-                vote_score: data.score, 
-                upvotes: data.upvotes, 
-                downvotes: data.downvotes,
-                userVote: data.user_vote
-              }
-            : comment
-        ));
-        
-        if (data.message === "Vote removed") {
-          toast.success("Vote removed");
-        } else {
-          toast.success(`${value === 1 ? "Upvoted" : "Downvoted"}`);
-        }
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Failed to vote");
-      }
-    } catch (error) {
-      console.error("Error voting on comment:", error);
-      toast.error("Network error while voting");
-    } finally {
-      setVotesLoading(prev => ({ ...prev, [`comment_${commentId}`]: false }));
-    }
-  };
-
-  // EXISTING: Like functions (keeping for backward compatibility)
-  const toggleLikePost = async () => {
-    if (!user || !token) {
-      toast.error("Please log in to like posts");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/posts/${id}/like`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPost((prev) => ({
-          ...prev,
-          likes: data.likes || 0,
-          liked_by: data.liked_by || []
-        }));
-        toast.success(data.message || "Post like toggled");
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Failed to like/unlike post");
-      }
-    } catch (error) {
-      toast.error("Server error while toggling post like");
-    }
-  };
-
-  const toggleLikeComment = async (commentId) => {
-    if (!user || !token) {
-      toast.error("Please log in to like comments");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${VITE_API_URL}/api/comments/${commentId}/like`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setComments((prev) =>
-          prev.map((c) =>
-            c.id === commentId
-              ? { 
-                  ...c, 
-                  likes: data.likes || 0, 
-                  liked_by: data.liked_by || []
-                }
+        setComments(cs =>
+          cs.map(c =>
+            c.id === itemId
+              ? { ...c,
+                  vote_score: data.vote_score,
+                  upvotes: data.upvotes,
+                  downvotes: data.downvotes,
+                  user_vote: data.user_vote }
               : c
           )
         );
-        toast.success(data.message || "Comment like toggled");
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || "Failed to like/unlike comment");
       }
-    } catch (error) {
-      toast.error("Error toggling comment like");
+
+      toast.success(data.message || "Vote updated");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setVotesLoading(v => ({ ...v, [key]: false }));
     }
   };
 
-  // NEW: Admin functions
+  /* Like helpers */
+  const handleLike = async ({ type, itemId }) => {
+    if (!user) {
+      toast.error("Login to like");
+      return;
+    }
+    try {
+      const url =
+        type === "post"
+          ? `${API}/api/posts/${id}/like`
+          : `${API}/api/comments/${itemId}/like`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Like failed");
+
+      if (type === "post") {
+        setPost(p => ({ ...p, liked_by_user: data.liked_by_user, likes_count: data.likes }));
+      } else {
+        setComments(cs =>
+          cs.map(c =>
+            c.id === itemId
+              ? { ...c, liked_by_user: data.liked_by_user, likes_count: data.likes }
+              : c
+          )
+        );
+      }
+      toast.success(data.message);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  /* Admin vote management */
   const fetchAdminVotes = async () => {
-    if (!user?.is_admin || !token) return;
-
+    if (!user?.is_admin) return;
     try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/admin/post/${post.id}/votes`, {
-        headers: { "Authorization": `Bearer ${token}` },
+      const res = await fetch(`${API}/api/votes/admin/post/${id}/votes`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAdminVotes(data.votes);
-        setAdminVotesVisible(true);
-      } else {
-        toast.error("Failed to fetch admin votes");
-      }
-    } catch (error) {
-      console.error("Error fetching admin votes:", error);
-      toast.error("Network error");
+      if (!res.ok) throw new Error("Load votes failed");
+      const { votes } = await res.json();
+      setAdminVotes(votes);
+      setAdminVotesVisible(true);
+    } catch {
+      toast.error("Unable to load admin votes");
     }
   };
 
-  const deleteAdminVote = async (voteId) => {
-    if (!user?.is_admin || !token) return;
-
-    const confirmed = window.confirm("Delete this vote?");
-    if (!confirmed) return;
-
+  const deleteAdminVote = async voteId => {
+    if (!user?.is_admin) return;
+    if (!confirm("Delete this vote?")) return;
     try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/admin/vote/${voteId}`, {
+      const res = await fetch(`${API}/api/votes/admin/vote/${voteId}`, {
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (res.ok) {
-        toast.success("Vote deleted");
-        fetchAdminVotes();
-        fetchPostVotes(post.id);
-      } else {
-        toast.error("Failed to delete vote");
-      }
-    } catch (error) {
-      console.error("Error deleting vote:", error);
-      toast.error("Network error");
+      if (!res.ok) throw new Error("Delete failed");
+      toast.success("Vote deleted");
+      fetchAdminVotes();
+      fetchPost();
+    } catch {
+      toast.error("Unable to delete vote");
     }
   };
 
   const resetAllVotes = async () => {
-    if (!user?.is_admin || !token) return;
-
-    const confirmed = window.confirm(`Delete ALL votes on "${post.title}"? This cannot be undone.`);
-    if (!confirmed) return;
-
+    if (!user?.is_admin) return;
+    if (!confirm("Reset ALL votes?")) return;
     try {
-      const res = await fetch(`${VITE_API_URL}/api/votes/admin/reset/post/${post.id}`, {
+      const res = await fetch(`${API}/api/votes/admin/reset/post/${id}`, {
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(`${data.votes_deleted} votes deleted`);
-        setAdminVotes([]);
-        setAdminVotesVisible(false);
-        fetchPostVotes(post.id);
-      } else {
-        toast.error("Failed to reset votes");
-      }
-    } catch (error) {
-      console.error("Error resetting votes:", error);
-      toast.error("Network error");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reset failed");
+      toast.success(`${data.votes_deleted} votes removed`);
+      setAdminVotes([]);
+      setAdminVotesVisible(false);
+      fetchPost();
+    } catch {
+      toast.error("Unable to reset votes");
     }
   };
 
-  // NEW: Vote buttons component
-  const VoteButtons = ({ type, itemId, score = 0, upvotes = 0, downvotes = 0, userVote = null, onVote }) => (
-    <div className="flex items-center space-x-2">
-      {/* Upvote */}
-      <button
-        onClick={() => onVote(1)}
-        disabled={votesLoading[type === 'post' ? 'post' : `comment_${itemId}`] || !user}
-        className={`flex items-center space-x-1 px-2 py-1 rounded transition-colors ${
-          userVote === 1
-            ? "bg-green-100 text-green-700 border border-green-300"
-            : "bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-600"
-        } ${!user ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-        title={user ? "Upvote" : "Login to vote"}
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-        </svg>
-        <span className="text-sm">{upvotes}</span>
-      </button>
-
-      {/* Score */}
-      <div className="flex flex-col items-center">
-        <span className={`font-medium text-sm ${
-          score > 0 ? "text-green-600" : score < 0 ? "text-red-600" : "text-gray-600"
-        }`}>
-          {score}
-        </span>
-      </div>
-
-      {/* Downvote */}
-      <button
-        onClick={() => onVote(-1)}
-        disabled={votesLoading[type === 'post' ? 'post' : `comment_${itemId}`] || !user}
-        className={`flex items-center space-x-1 px-2 py-1 rounded transition-colors ${
-          userVote === -1
-            ? "bg-red-100 text-red-700 border border-red-300"
-            : "bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600"
-        } ${!user ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-        title={user ? "Downvote" : "Login to vote"}
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
-        <span className="text-sm">{downvotes}</span>
-      </button>
-
-      {/* Loading */}
-      {votesLoading[type === 'post' ? 'post' : `comment_${itemId}`] && (
-        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-      )}
-    </div>
-  );
-
-  const isPostLiked = () => post?.liked_by?.includes(user?.id);
-  const isCommentLiked = (comment) => comment?.liked_by?.includes(user?.id);
-
   const handleDeletePost = async () => {
-    if (!user || post.user_id !== user.id) {
-      toast.error("You can only delete your own posts");
+    if (user?.id !== post.user_id) {
+      toast.error("Not your post");
       return;
     }
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
-
+    if (!confirm("Delete post?")) return;
     try {
-      const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
+      const res = await fetch(`${API}/api/posts/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
         credentials: "include",
       });
-      if (res.ok) {
-        toast.success("Post deleted");
-        navigate("/");
-      } else {
-        toast.error("Delete failed");
-      }
+      if (!res.ok) throw new Error("Delete failed");
+      toast.success("Post deleted");
+      navigate("/");
     } catch {
-      toast.error("Server error on delete");
+      toast.error("Unable to delete");
     }
   };
 
-  const formatDate = (date) =>
-    new Date(date).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+  const formatDate = iso =>
+    new Date(iso).toLocaleString("en-US", {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit"
     });
 
-  if (loading) return <p className="text-center p-6">Loading...</p>;
-  if (error) return <p className="text-center text-red-600 p-6">{error}</p>;
-  if (!post) return <p className="text-center p-6">Post not found</p>;
+  if (loading) return <p>Loading...</p>;
+  if (error)   return <p className="text-red-600">{error}</p>;
+  if (!post)   return <p>Post not found.</p>;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <Link to="/" className="text-indigo-600 hover:underline mb-4 inline-block">
-        ← Back
+    <div className="max-w-3xl mx-auto p-6 space-y-6">
+      <Link to="/" className="text-indigo-600 hover:underline">
+        ← Back to Posts
       </Link>
 
-      <article className="bg-white border p-6 rounded-lg shadow-sm">
-        <header className="mb-4">
-          <h1 className="text-3xl font-bold">{post.title}</h1>
-          <p className="text-sm text-gray-500">
-            By User #{post.user_id} • {formatDate(post.created_at)}
-          </p>
-        </header>
+      <article className="bg-white shadow rounded p-6">
+        <h1 className="text-2xl font-bold">{post.title}</h1>
+        <p className="text-sm text-gray-500">
+          By {post.author.username} • {formatDate(post.created_at)}
+        </p>
+        <div className="mt-4 prose whitespace-pre-wrap">{post.content}</div>
 
-        <p className="mb-4 text-gray-800 whitespace-pre-wrap">{post.content}</p>
-
-        {/* NEW: Vote System + Existing Like System */}
-        <div className="flex items-center gap-6 mb-4">
-          {/* NEW: Vote Buttons */}
+        <div className="flex items-center space-x-6 mt-6">
+          {/* Vote */}
           <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600 font-medium">Vote:</span>
-            <VoteButtons
+            <span className="font-medium">Vote:</span>
+            <VoteButton
               type="post"
-              itemId={post.id}
-              score={post.vote_score || 0}
-              upvotes={post.upvotes || 0}
-              downvotes={post.downvotes || 0}
-              userVote={post.userVote}
-              onVote={handlePostVote}
+              id={post.id}
+              currentVote={post.user_vote}
+              onVote={v => handleVote({ type: "post", itemId: post.id, value: v })}
             />
+            <span>{post.vote_score || 0}</span>
           </div>
 
-          {/* EXISTING: Like Button (keeping for compatibility) */}
+          {/* Like */}
           <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600 font-medium">Like:</span>
-            {user ? (
-              <button
-                onClick={toggleLikePost}
-                className={`px-3 py-1 rounded-md font-medium transition-colors ${
-                  isPostLiked()
-                    ? "bg-red-100 text-red-600 border border-red-300 hover:bg-red-200"
-                    : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
-                }`}
-              >
-                {isPostLiked() ? "♥ Unlike" : "♡ Like"} ({post.likes || 0})
-              </button>
-            ) : (
-              <span className="px-3 py-1 rounded-md text-gray-500 bg-gray-100 border border-gray-300">
-                ♡ Like ({post.likes || 0})
-              </span>
-            )}
+            <span className="font-medium">Like:</span>
+            <LikeButton
+              type="post"
+              id={post.id}
+              liked={post.liked_by_user}
+              onClick={() => handleLike({ type: "post", itemId: post.id })}
+            />
+            <span>{post.likes_count}</span>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-4">
+        {/* Post actions */}
+        <div className="mt-4 space-x-3">
           {user?.id === post.user_id && (
             <>
               <Link
                 to={`/posts/${post.id}/edit`}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Edit
               </Link>
               <button
                 onClick={handleDeletePost}
-                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
               >
                 Delete
               </button>
@@ -545,130 +296,110 @@ const SinglePost = () => {
           )}
         </div>
 
-        {/* NEW: Admin Controls */}
+        {/* Admin controls */}
         {user?.is_admin && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-6">
-            <h3 className="text-lg font-semibold text-red-800 mb-3">
-              🛡️ Admin: Vote Management
+          <section className="mt-6 p-4 bg-red-50 border border-red-200 rounded">
+            <h3 className="text-lg font-semibold text-red-800">
+              Admin: Manage Votes
             </h3>
-            
-            <div className="flex space-x-3 mb-4">
+            <div className="mt-2 flex space-x-3">
               <button
                 onClick={fetchAdminVotes}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
-                View All Votes ({(post.upvotes || 0) + (post.downvotes || 0)})
+                View Votes
               </button>
               <button
                 onClick={resetAllVotes}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
               >
-                Reset All Votes
+                Reset Votes
               </button>
             </div>
-
-            {/* Admin Votes List */}
             {adminVotesVisible && (
-              <div className="bg-white rounded border p-4">
-                <h4 className="font-medium mb-3">Individual Votes:</h4>
+              <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
                 {adminVotes.length === 0 ? (
-                  <p className="text-gray-500">No votes found.</p>
+                  <p className="text-gray-500">No votes recorded.</p>
                 ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {adminVotes.map((vote) => (
-                      <div
-                        key={vote.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded"
+                  adminVotes.map(v => (
+                    <div
+                      key={v.id}
+                      className="flex justify-between items-center p-2 bg-white border rounded"
+                    >
+                      <span>
+                        {v.username} ({v.user_id}) —{" "}
+                        <strong className={v.value === 1 ? "text-green-600" : "text-red-600"}>
+                          {v.value > 0 ? `+${v.value}` : v.value}
+                        </strong>
+                      </span>
+                      <button
+                        onClick={() => deleteAdminVote(v.id)}
+                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
                       >
-                        <div className="flex items-center space-x-3">
-                          <span
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                              vote.value === 1 ? "bg-green-500" : "bg-red-500"
-                            }`}
-                          >
-                            {vote.value === 1 ? "+" : "-"}
-                          </span>
-                          <span className="font-medium">{vote.username}</span>
-                          <span className="text-gray-500 text-sm">(ID: {vote.user_id})</span>
-                        </div>
-                        <button
-                          onClick={() => deleteAdminVote(vote.id)}
-                          className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                        Delete
+                      </button>
+                    </div>
+                  ))
                 )}
               </div>
             )}
-          </div>
+          </section>
         )}
       </article>
 
-      <section className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Comments ({comments.length})</h2>
+      {/* Comments Section */}
+      <section>
+        <h2 className="text-xl font-semibold">
+          Comments ({post.comments_count})
+        </h2>
 
         {user ? (
-          <CommentBox postId={post.id} onCommentSubmit={refreshComments} />
+          <CommentBox postId={post.id} onCommentSubmit={fetchComments} />
         ) : (
-          <p className="text-center text-gray-500">
-            Please <Link to="/login" className="text-indigo-600">log in</Link> to comment
+          <p className="text-gray-500">
+            <Link to="/login" className="text-indigo-600 hover:underline">
+              Log in
+            </Link>{" "}
+            to comment.
           </p>
         )}
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-4 space-y-4">
           {commentsLoading ? (
-            <p className="text-gray-500">Loading comments...</p>
+            <p className="text-gray-500">Loading comments…</p>
           ) : comments.length === 0 ? (
             <p className="text-gray-400">No comments yet.</p>
           ) : (
-            comments.map((comment) => (
-              <div key={comment.id} className="bg-gray-50 border p-4 rounded">
-                <p className="text-gray-800 mb-2 whitespace-pre-wrap">{comment.content}</p>
-                <div className="flex justify-between items-center text-xs text-gray-500 mb-3">
-                  <span>By User #{comment.user_id}</span>
-                  <time>{formatDate(comment.created_at)}</time>
-                </div>
-                
-                {/* NEW: Vote System + Existing Like System for Comments */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    {/* NEW: Comment Vote Buttons */}
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-gray-600">Vote:</span>
-                      <VoteButtons
-                        type="comment"
-                        itemId={comment.id}
-                        score={comment.vote_score || 0}
-                        upvotes={comment.upvotes || 0}
-                        downvotes={comment.downvotes || 0}
-                        userVote={comment.userVote}
-                        onVote={(value) => handleCommentVote(comment.id, value)}
-                      />
-                    </div>
+            comments.map(c => (
+              <div key={c.id} className="p-4 bg-gray-50 border rounded">
+                <p className="whitespace-pre-wrap">{c.content}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  By {c.author.username} • {formatDate(c.created_at)}
+                </p>
 
-                    {/* EXISTING: Like Button for Comments */}
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-gray-600">Like:</span>
-                      {user ? (
-                        <button
-                          onClick={() => toggleLikeComment(comment.id)}
-                          className={`px-2 py-1 text-xs rounded transition-colors ${
-                            isCommentLiked(comment)
-                              ? "text-red-600 bg-red-100 border border-red-300 hover:bg-red-200"
-                              : "text-gray-600 bg-gray-100 border border-gray-300 hover:bg-gray-200"
-                          } cursor-pointer`}
-                        >
-                          {isCommentLiked(comment) ? "♥ Unlike" : "♡ Like"} ({comment.likes || 0})
-                        </button>
-                      ) : (
-                        <span className="px-2 py-1 text-xs text-gray-500 bg-gray-100 border border-gray-300 rounded">
-                          ♡ Like ({comment.likes || 0})
-                        </span>
-                      )}
-                    </div>
+                <div className="flex items-center space-x-6 mt-2">
+                  {/* Comment vote */}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">Vote:</span>
+                    <VoteButton
+                      type="comment"
+                      id={c.id}
+                      currentVote={c.user_vote}
+                      onVote={v => handleVote({ type: "comment", itemId: c.id, value: v })}
+                    />
+                    <span>{c.vote_score || 0}</span>
+                  </div>
+
+                  {/* Comment like */}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">Like:</span>
+                    <LikeButton
+                      type="comment"
+                      id={c.id}
+                      liked={c.liked_by_user}
+                      onClick={() => handleLike({ type: "comment", itemId: c.id })}
+                    />
+                    <span>{c.likes_count}</span>
                   </div>
                 </div>
               </div>
