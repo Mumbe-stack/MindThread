@@ -500,4 +500,3 @@ def flag_post(post_id):
             'error': 'Failed to flag post',
             'message': str(e)
         }), 500
-        
