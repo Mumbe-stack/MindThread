@@ -10,10 +10,24 @@ const Profile = () => {
   const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
   const [userStats, setUserStats] = useState({ posts: 0, comments: 0, votes: 0 });
+  const [globalStats, setGlobalStats] = useState({ users: 0, posts: 0, comments: 0 });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [fullUserData, setFullUserData] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  // Custom info toast function
+  const showInfo = (message) => {
+    toast(message, {
+      icon: "ℹ️",
+      style: {
+        borderRadius: '10px',
+        background: '#3b82f6',
+        color: '#fff',
+      },
+      duration: 4000,
+    });
+  };
 
   useEffect(() => {
     // Only redirect if user is definitively not authenticated and not loading
@@ -28,7 +42,7 @@ const Profile = () => {
     }
   }, [user, token]);
 
-  // 🔧 FIXED: Fetch user stats using the working endpoint
+  // Improved stats fetching with better error handling like AdminDashboard
   const fetchUserStats = async () => {
     if (!token || !user) return;
     
@@ -36,7 +50,7 @@ const Profile = () => {
       setIsLoadingStats(true);
       console.log("Fetching user stats...");
       
-      // Use the working /api/users/me endpoint
+      // Fetch user data
       const response = await authenticatedRequest(`${API_URL}/api/users/me`);
       
       if (response.ok) {
@@ -45,7 +59,7 @@ const Profile = () => {
         
         setFullUserData(userData);
         
-        // Parse stats from the response
+        // Parse stats from the response with multiple fallbacks
         let stats = { posts: 0, comments: 0, votes: 0 };
         
         if (userData.stats) {
@@ -55,7 +69,7 @@ const Profile = () => {
             votes: userData.stats.votes_count || userData.stats.vote_count || userData.stats.votes || 0
           };
         } else {
-          // Try direct properties
+          // Try direct properties as fallback
           stats = {
             posts: userData.post_count || userData.posts_count || 0,
             comments: userData.comment_count || userData.comments_count || 0,
@@ -66,13 +80,33 @@ const Profile = () => {
         console.log("Parsed stats:", stats);
         setUserStats(stats);
         
-        if (stats.posts > 0 || stats.comments > 0 || stats.votes > 0) {
-          toast.success("Profile stats loaded successfully");
-        } else {
-          toast.info("No activity yet - create your first post!");
+        // Try to fetch global stats for comparison (like AdminDashboard)
+        if (user.is_admin) {
+          try {
+            const globalResponse = await authenticatedRequest(`${API_URL}/api/admin/stats`);
+            if (globalResponse.ok) {
+              const globalData = await globalResponse.json();
+              setGlobalStats({
+                users: globalData.users || globalData.total_users || 0,
+                posts: globalData.posts || globalData.total_posts || 0,
+                comments: globalData.comments || globalData.total_comments || 0
+              });
+            }
+          } catch (globalError) {
+            console.log("Could not fetch global stats:", globalError.message);
+          }
         }
+        
+        // Always show success message with stats context
+        const totalActivity = stats.posts + stats.comments + stats.votes;
+        if (totalActivity > 0) {
+          toast.success(`Profile loaded: ${stats.posts} posts, ${stats.comments} comments, ${stats.votes} votes`);
+        } else {
+          showInfo("Profile loaded successfully! Start by creating your first post.");
+        }
+        
       } else {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`Failed to fetch profile data (${response.status})`);
       }
 
     } catch (error) {
@@ -82,16 +116,16 @@ const Profile = () => {
         toast.error("Session expired. Please log in again.");
         navigate("/login");
       } else {
-        toast.error(`Failed to load stats: ${error.message}`);
+        toast.error(`Failed to load profile: ${error.message}`);
       }
       
+      // Set default stats on error
       setUserStats({ posts: 0, comments: 0, votes: 0 });
     } finally {
       setIsLoadingStats(false);
     }
   };
 
-  // 🔧 FIXED: Avatar upload function
   const handleAvatarUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -197,7 +231,7 @@ This will permanently delete:
 
   // Handle edit profile - show info message for now
   const handleEditProfile = () => {
-    toast.info("Profile editing feature coming soon! For now, you can update your avatar.");
+    showInfo("Profile editing feature coming soon! For now, you can update your avatar.");
   };
 
   const handleRefreshProfile = async () => {
@@ -339,67 +373,141 @@ This will permanently delete:
         </div>
       </div>
 
-      {/* User Statistics */}
+      {/* User Statistics - Enhanced like AdminDashboard */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-indigo-50 p-6 rounded-lg border border-indigo-200 shadow-sm hover:shadow-md transition-shadow">
           {isLoadingStats ? (
             <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded"></div>
+              <div className="h-8 bg-indigo-200 rounded mb-2"></div>
+              <div className="h-4 bg-indigo-200 rounded"></div>
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-3 bg-indigo-100 rounded-lg">
-                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-indigo-600 text-sm font-medium uppercase tracking-wide">Your Posts</p>
+                  <p className="text-3xl font-bold text-indigo-900 mb-1">{userStats.posts || 0}</p>
+                  <p className="text-xs text-indigo-600">
+                    {userStats.posts === 0 ? "Create your first post!" : 
+                     userStats.posts === 1 ? "Great start!" : 
+                     userStats.posts < 5 ? "Keep posting!" : "Prolific author! 🌟"}
+                  </p>
+                </div>
+                <div className="text-indigo-500 text-3xl">📝</div>
               </div>
-              <p className="text-3xl font-bold text-indigo-600 mb-1">{userStats.posts}</p>
-              <p className="text-sm font-medium text-gray-500">Posts</p>
             </>
           )}
         </div>
         
-        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-green-50 p-6 rounded-lg border border-green-200 shadow-sm hover:shadow-md transition-shadow">
           {isLoadingStats ? (
             <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded"></div>
+              <div className="h-8 bg-green-200 rounded mb-2"></div>
+              <div className="h-4 bg-green-200 rounded"></div>
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-3 bg-green-100 rounded-lg">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-600 text-sm font-medium uppercase tracking-wide">Your Comments</p>
+                  <p className="text-3xl font-bold text-green-900 mb-1">{userStats.comments || 0}</p>
+                  <p className="text-xs text-green-600">
+                    {userStats.comments === 0 ? "Join the conversation!" : 
+                     userStats.comments === 1 ? "Nice engagement!" : 
+                     userStats.comments < 10 ? "Active participant!" : "Community champion! 🎉"}
+                  </p>
+                </div>
+                <div className="text-green-500 text-3xl">💬</div>
               </div>
-              <p className="text-3xl font-bold text-green-600 mb-1">{userStats.comments}</p>
-              <p className="text-sm font-medium text-gray-500">Comments</p>
             </>
           )}
         </div>
         
-        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-orange-50 p-6 rounded-lg border border-orange-200 shadow-sm hover:shadow-md transition-shadow">
           {isLoadingStats ? (
             <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded"></div>
+              <div className="h-8 bg-orange-200 rounded mb-2"></div>
+              <div className="h-4 bg-orange-200 rounded"></div>
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-3 bg-orange-100 rounded-lg">
-                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                </svg>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-600 text-sm font-medium uppercase tracking-wide">Your Votes</p>
+                  <p className="text-3xl font-bold text-orange-900 mb-1">{userStats.votes || 0}</p>
+                  <p className="text-xs text-orange-600">
+                    {userStats.votes === 0 ? "Start voting on posts!" : 
+                     userStats.votes === 1 ? "Thanks for voting!" : 
+                     userStats.votes < 20 ? "Good participation!" : "Super engaged! 🚀"}
+                  </p>
+                </div>
+                <div className="text-orange-500 text-3xl">👍</div>
               </div>
-              <p className="text-3xl font-bold text-orange-600 mb-1">{userStats.votes}</p>
-              <p className="text-sm font-medium text-gray-500">Votes</p>
             </>
           )}
         </div>
       </div>
 
-      {/* 🔧 SIMPLIFIED: Avatar Upload Section */}
+      {/* Activity Summary Card */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">📊 Your Activity Summary</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-2xl font-bold text-indigo-600">{(userStats.posts + userStats.comments + userStats.votes) || 0}</p>
+                <p className="text-sm text-gray-600">Total Actions</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-green-600">
+                  {user.created_at ? Math.floor((new Date() - new Date(user.created_at)) / (1000 * 60 * 60 * 24)) : 0}
+                </p>
+                <p className="text-sm text-gray-600">Days Active</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-purple-600">
+                  {(userStats.posts + userStats.comments) > 0 ? 
+                    Math.round((userStats.votes / (userStats.posts + userStats.comments)) * 10) / 10 || 0 : 0}
+                </p>
+                <p className="text-sm text-gray-600">Engagement Ratio</p>
+              </div>
+            </div>
+          </div>
+          <div className="text-6xl opacity-20">🎯</div>
+        </div>
+      </div>
+
+      {/* Platform Context (for admins) */}
+      {user.is_admin && globalStats.users > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">🌐 Platform Overview</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <p className="text-xl font-bold text-blue-600">{globalStats.users}</p>
+              <p className="text-sm text-gray-600">Total Users</p>
+              <p className="text-xs text-blue-500">
+                You're one of {globalStats.users} members!
+              </p>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <p className="text-xl font-bold text-green-600">{globalStats.posts}</p>
+              <p className="text-sm text-gray-600">Total Posts</p>
+              <p className="text-xs text-green-500">
+                {globalStats.posts > 0 ? `${Math.round((userStats.posts / globalStats.posts) * 100)}% yours` : "0% yours"}
+              </p>
+            </div>
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <p className="text-xl font-bold text-purple-600">{globalStats.comments}</p>
+              <p className="text-sm text-gray-600">Total Comments</p>
+              <p className="text-xs text-purple-500">
+                {globalStats.comments > 0 ? `${Math.round((userStats.comments / globalStats.comments) * 100)}% yours` : "0% yours"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Avatar Upload Section */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8 shadow-sm">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Profile Picture</h3>
         <div className="flex items-center space-x-4">
@@ -568,28 +676,6 @@ This will permanently delete:
           )}
         </button>
       </div>
-
-      {/* Debug Panel (Development Only) */}
-      {import.meta.env.DEV && (
-        <div className="fixed bottom-4 left-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
-          <h4 className="font-bold mb-2">🔍 Profile Debug</h4>
-          <div className="space-y-1">
-            <div>API: {API_URL}</div>
-            <div>User: {user?.username}</div>
-            <div>User ID: {user?.id}</div>
-            <div>Token: {token ? "✅ Present" : "❌ Missing"}</div>
-            <div>Loading: {loading ? "🔄" : "✅"}</div>
-            <div>Stats: P:{userStats.posts} C:{userStats.comments} V:{userStats.votes}</div>
-            <div>Loading Stats: {isLoadingStats ? "🔄" : "✅"}</div>
-          </div>
-          <button
-            onClick={() => console.log({ user, token, userStats, fullUserData, API_URL })}
-            className="mt-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-          >
-            Log Debug Data
-          </button>
-        </div>
-      )}
     </div>
   );
 };
