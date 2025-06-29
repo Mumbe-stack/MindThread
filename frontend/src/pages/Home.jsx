@@ -6,14 +6,14 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-    
+      {/* Hero Section */}
       <div className="relative overflow-hidden">
-       
+        {/* Background Pattern */}
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-100/20 to-purple-100/20"></div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-           
+            {/* Left Content */}
             <div className="text-center lg:text-left">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 leading-tight">
                 Welcome to
@@ -58,19 +58,19 @@ const Home = () => {
               )}
             </div>
 
-          
+            {/* Right Visual Element - CSS Art instead of image */}
             <div className="relative flex justify-center lg:justify-end">
               <div className="relative w-80 h-80 sm:w-96 sm:h-96">
-           
+                {/* Main Circle */}
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full animate-pulse"></div>
 
-            
+                {/* Floating Elements */}
                 <div className="absolute top-8 left-8 w-16 h-16 bg-gradient-to-br from-pink-400 to-rose-500 rounded-2xl rotate-12 animate-bounce delay-300"></div>
                 <div className="absolute top-12 right-12 w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full animate-bounce delay-700"></div>
                 <div className="absolute bottom-16 left-16 w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl -rotate-12 animate-bounce delay-500"></div>
                 <div className="absolute bottom-8 right-8 w-14 h-14 bg-gradient-to-br from-violet-400 to-purple-500 rounded-2xl rotate-45 animate-bounce delay-1000"></div>
 
-               
+                {/* Center Icon */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg">
                     <svg className="w-12 h-12 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +84,7 @@ const Home = () => {
         </div>
       </div>
 
-     
+      {/* Features Section */}
       <div className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
@@ -97,7 +97,7 @@ const Home = () => {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-          
+            {/* Feature 1 */}
             <div className="text-center group p-6 rounded-2xl hover:bg-gray-50 transition-all duration-300">
               <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-200">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,7 +110,7 @@ const Home = () => {
               </p>
             </div>
 
-         
+            {/* Feature 2 */}
             <div className="text-center group p-6 rounded-2xl hover:bg-gray-50 transition-all duration-300">
               <div className="w-16 h-16 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-200">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,7 +123,7 @@ const Home = () => {
               </p>
             </div>
 
-         
+            {/* Feature 3 */}
             <div className="text-center group p-6 rounded-2xl hover:bg-gray-50 transition-all duration-300">
               <div className="w-16 h-16 bg-gradient-to-r from-rose-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-200">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +139,7 @@ const Home = () => {
         </div>
       </div>
 
-   }
+      {/* CTA Section */}
       <div className="py-16 bg-gradient-to-r from-indigo-600 to-purple-600 relative overflow-hidden">
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute top-0 left-0 w-full h-full">
@@ -179,7 +179,7 @@ const Home = () => {
           {user && (
             <div className="space-y-4">
               <Link
-                to="/posts/new"
+                to="/login"
                 className="inline-flex items-center justify-center px-8 py-4 bg-white text-indigo-600 text-lg font-semibold rounded-xl hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
               >
                 Engage with other bloggers
