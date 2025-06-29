@@ -9,10 +9,15 @@ const EditPost = () => {
   const navigate = useNavigate();
   const [post, setPost] = useState({ title: "", content: "" });
 
-  
   useEffect(() => {
     const fetchPost = async () => {
       const token = localStorage.getItem("token");
+
+      if (!token) {
+        toast.error("You must be logged in.");
+        navigate("/login");
+        return;
+      }
 
       try {
         const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
@@ -27,13 +32,22 @@ const EditPost = () => {
             navigate("/posts");
             return;
           }
+          if (res.status === 401) {
+            toast.error("Session expired. Please log in again.");
+            navigate("/login");
+            return;
+          }
+          if (res.status === 404) {
+            toast.error("Post not found.");
+            navigate("/posts");
+            return;
+          }
           throw new Error("Failed to fetch post.");
         }
 
         const data = await res.json();
         setPost({ title: data.title, content: data.content });
       } catch (err) {
-        
         toast.error("Could not load the post.");
       }
     };
@@ -41,10 +55,20 @@ const EditPost = () => {
     fetchPost();
   }, [id, navigate]);
 
-  
   const handleUpdate = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
+
+    if (!token) {
+      toast.error("You must be logged in.");
+      navigate("/login");
+      return;
+    }
+
+    if (!post.title.trim() || !post.content.trim()) {
+      toast.error("Title and content cannot be empty.");
+      return;
+    }
 
     try {
       const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
@@ -57,14 +81,14 @@ const EditPost = () => {
       });
 
       if (res.ok) {
-        toast.success("Post updated successfully.");
+        const data = await res.json();
+        toast.success(data.message || "Post updated successfully.");
         navigate(`/posts/${id}`);
       } else {
         const error = await res.json();
         toast.error(error.message || "Failed to update post.");
       }
     } catch (err) {
-      
       toast.error("Something went wrong while updating.");
     }
   };
