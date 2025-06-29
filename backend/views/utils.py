@@ -745,7 +745,7 @@ def serialize_post(post, current_user_id=None):
         "title": post.title,
         "content": post.content,
         "tags": post.tags,
-        "user_id": post.user_id,  # Required for frontend check
+        "user_id": post.user_id,  
         "author": {
             "id": post.user.id,
             "username": post.user.username,

@@ -1,110 +1,98 @@
-# MindThread
-MindThread is a full-stack web application that blends a modern blogging experience with interactive Q&A-style community features. Users can create insightful posts, contribute comments, vote on content, and manage their profiles, while admins maintain a clean and collaborative environment.
-
-
+## MindThread
+MindThread is a full-stack web application that combines a modern blogging experience with community-driven Q&A-style features. Users can create posts, engage in discussions through comments, vote on content, and personalize their profiles. Admins maintain content quality through moderation tools.
 
 ## Features
-
 ### User Features
-- Register, log in, and manage profile
-- Create, edit, and delete blog posts
-- Comment on posts with threaded replies
-- Upvote/downvote posts and comments
-- View user profiles with contribution history
+User authentication (register/login/logout)
+Create, edit, delete blog posts
+Comment on posts (supports nested/threaded comments)
+Upvote/downvote posts and comments
+View author profiles and contribution history
 
 ### Admin Features
-- Admin dashboard for content moderation
-- Approve or hide blog posts
-- Remove inappropriate comments
-- Manage users and content
+Admin dashboard for:
+Content moderation (approve/flag/remove posts/comments)
+User management
+Data insights and visual analytics
+Export user/post data as CSV
+Toggle post/comment approval and flag status
 
-### Relationships
-- One-to-many between User ↔ Post, User ↔ Comment, Post ↔ Comment
-- One-to-many between User ↔ Vote, Post ↔ Vote, Comment ↔ Vote
+### Data Relationships
+One-to-many: User ↔ Post, User ↔ Comment, Post ↔ Comment
+One-to-many: User ↔ Vote, Post ↔ Vote, Comment ↔ Vote
 
+### Tech Stack
+🔹 Frontend
+React (Vite)
+React Router DOM
+Tailwind CSS
+Chart.js
+Toast Notifications
 
+🔸 Backend
+Flask
+Flask-JWT-Extended (Token-based Auth)
+Flask-SQLAlchemy + Migrate
+Flask-Mail
+Flask-CORS
 
-## Technologies
+🗄️ Database
+SQLite (Development)
+PostgreSQL (Production-ready)
 
-- **Frontend**: React, Axios, React Router
-- **Backend**: Flask, Flask SQLAlchemy, Flask-JWT-Extended
-- **Database**: SQLite / PostgreSQL (configurable)
-- **Auth**: JWT-based login system
-- **API Style**: RESTful JSON APIs
+### Getting Started
+Backend Setup
+Navigate to the backend directory:
 
+cd backend
+Create a virtual environment and activate it:
 
-
-## Project Structure
-MindThread
-root/
-├── client/                  
-│   ├── src/
-│   ├── public/
-│   └── package.json
-├── server/                  
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   ├── routes/
-│   │   ├── schemas/         
-│   │   ├── utils/
-│   │   └── auth.py
-│   ├── migrations/          
-│   ├── config.py
-│   ├── run.py
-│   └── requirements.txt
-├── README.md
-└── LICENSE
-
-
-## How to Run the Application
-
-### Clone the Repository
-git clone https://github.com/Mumbe-stack/MindThread
-cd insightbase
-
-## Set Up the Backend (Flask API)
-cd server
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
+Install dependencies:
+
 pip install -r requirements.txt
+Set up environment variables in a .env file (example below):
 
-# Set up environment variables (create a .env file if needed)
-export FLASK_APP=run.py
-export FLASK_ENV=development
+FLASK_APP=app.py
+FLASK_ENV=development
+SECRET_KEY=your_secret_key
+JWT_SECRET_KEY=your_jwt_secret
+MAIL_SERVER=smtp.example.com
+Run the app:
 
-# Run migrations (if using Flask-Migrate)
-flask db init
-flask db migrate
-flask db upgrade
-
-# Start the server
 flask run
+Frontend Setup
+Navigate to the frontend directory:
 
-## Set Up the Frontend (React)
-cd ../client
+cd frontend
+Install dependencies:
+
 npm install
-npm start
-React runs on http://localhost:3000 and Flask API runs on http://localhost:5000
+Create a .env file with your API URL:
 
-## Environment Variables Example
+VITE_API_URL=http://localhost:5000
+Start the development server:
 
-Backend (.env or terminal exports)
-SECRET_KEY=your-secret-key
-JWT_SECRET_KEY=your-jwt-key
-DATABASE_URL=sqlite:///app.db
+npm run dev
+# Deployment
+Frontend: Netlify or Vercel
+Backend: Render or Railway
+Use CORS settings in Flask to whitelist frontend domains
+Set production .env variables securely on deployment platforms
 
-Frontend (.env)
-REACT_APP_API_BASE_URL=http://localhost:5000
+# Testing
+Test APIs using Postman or curl
+Use pytest (or unittest) for backend testing
+Ensure CORS, auth, and edge cases are fully covered
 
-## API Endpoints Overview
-Method	Endpoint	             Description
-POST	/api/register	         Register a new user
-POST	/api/login	             Login and receive JWT token
-GET	    /api/posts	             List all approved blog posts
-POST	/api/posts	             Create a new blog post
-GET	    /api/posts/:id	          Get a specific post
-POST	/api/posts/:id/comments	  Comment on a post
-POST	/api/votes/post/:id	      Vote on a post
-POST	/api/votes/comment/:id	  Vote on a comment
+# Contributing
+Fork the repository
+Create a new branch:
+git checkout -b feature/your-feature-name
+Make your changes
 
+Commit and push:
+git commit -m "Add your feature"
+git push origin feature/your-feature-name
+Open a pull request
