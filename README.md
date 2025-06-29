@@ -3,6 +3,7 @@
 MindThread is a full-stack web application that combines a modern blogging experience with community-driven Q&A-style features. Users can create posts, engage in discussions through comments, vote on content, and personalize their profiles. Admins maintain content quality through moderation tools.
 
 >> By Mercy Mumbe Munyongwe
+>> https://mindthreadbloggingapp.netlify.app/
 >> https://drive.google.com/file/d/1lbnwi7VQQrGgqa6cHobdlzu3sFMSIc2X/view?usp=sharing
 
 ## Features
