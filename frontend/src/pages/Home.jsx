@@ -179,7 +179,7 @@ const Home = () => {
           {user && (
             <div className="space-y-4">
               <Link
-                to="/login"
+                to="/posts/new"
                 className="inline-flex items-center justify-center px-8 py-4 bg-white text-indigo-600 text-lg font-semibold rounded-xl hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
               >
                 Engage with other bloggers
