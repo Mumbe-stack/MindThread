@@ -261,68 +261,64 @@ def get_post(post_id):
 @post_bp.route('/posts/<int:post_id>', methods=['PATCH'])
 @jwt_required()
 def update_post(post_id):
-    """Update a specific post"""
+    """Update a specific post — only allowed by the original author"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         post = Post.query.get(post_id)
-        
+
         if not post:
-            return jsonify({'error':'Post not found'}), 404
-        if post.user_id != current_user_id and not current_user.is_admin:
-            return jsonify({'error':'Permission denied'}), 403
+            return jsonify({'error': 'Post not found'}), 404
+
+        # Restrict strictly to post owner
+        if post.user_id != current_user_id:
+            return jsonify({'error': 'Permission denied'}), 403
 
         data = request.get_json(silent=True)
         if not data:
-            return jsonify({'error':'No JSON body provided'}), 400
+            return jsonify({'error': 'No JSON body provided'}), 400
 
-        # Regular users editing their post requires re-approval
         requires_reapproval = False
 
         if 'title' in data:
             title = data['title'].strip()
-            if not title: 
-                return jsonify({'error':'Title cannot be empty'}), 400
+            if not title:
+                return jsonify({'error': 'Title cannot be empty'}), 400
             if post.title != title:
                 post.title = title
                 requires_reapproval = True
 
         if 'content' in data:
             content = data['content'].strip()
-            if not content: 
-                return jsonify({'error':'Content cannot be empty'}), 400
+            if not content:
+                return jsonify({'error': 'Content cannot be empty'}), 400
             if post.content != content:
                 post.content = content
                 requires_reapproval = True
 
         if 'tags' in data:
-            post.tags = data['tags'].strip()
+            post.tags = data['tags'].strip() if data['tags'] else None
 
-        # Admin-only fields
-        if current_user.is_admin:
-            if 'is_approved' in data: 
-                post.is_approved = bool(data['is_approved'])
-                requires_reapproval = False  # Admin is handling approval
-            if 'is_flagged' in data: 
-                post.is_flagged = bool(data['is_flagged'])
-        else:
-            # Non-admin users need re-approval if they edit content
-            if requires_reapproval and post.is_approved:
-                post.is_approved = False
+        # Non-admin users (which is now everyone here) require re-approval
+        if requires_reapproval and post.is_approved:
+            post.is_approved = False
 
         post.updated_at = datetime.utcnow()
         db.session.commit()
 
         response_data = serialize_post(post, current_user_id)
-        if requires_reapproval and not current_user.is_admin:
+        if requires_reapproval:
             response_data['message'] = 'Post updated successfully and is pending admin approval'
+        else:
+            response_data['message'] = 'Post updated successfully'
 
         return jsonify(response_data), 200
 
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error updating post {post_id}: {e}")
-        return jsonify({'error':'Failed to update post','message':str(e)}), 500
+        return jsonify({'error': 'Failed to update post', 'message': str(e)}), 500
+
 
 @post_bp.route('/posts/<int:post_id>', methods=['DELETE'])
 @jwt_required()
