@@ -71,19 +71,16 @@ def get_user_data_dict(user):
 @user_bp.route("/users", methods=["GET"])
 @jwt_required()
 def fetch_all_users():
-   
     try:
         current_user = User.query.get(get_jwt_identity())
         
         if not current_user or not current_user.is_admin:
             return jsonify({"error": "Admin privileges required"}), 403
 
-      
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 20, type=int), 100)
         search = request.args.get('search', '').strip()
 
-     
         query = User.query
         if search:
             query = query.filter(
@@ -93,31 +90,26 @@ def fetch_all_users():
                 )
             )
 
-      
         query = query.order_by(User.created_at.desc())
+        total = query.order_by(None).count()  
 
-      
         users = query.limit(per_page).offset((page - 1) * per_page).all()
-        users_data = []
-        
-        for user in users:
-            
-            user_data = get_user_data_dict(user)
-            users_data.append(user_data)
+        users_data = [get_user_data_dict(user) for user in users]
 
         return jsonify({
             "users": users_data,
             "pagination": {
                 "page": page,
                 "per_page": per_page,
-                "total": query.count(),
+                "total": total,
                 "search": search
             }
         }), 200
 
     except Exception as e:
         current_app.logger.error(f"Failed to fetch users: {e}")
-        return jsonify({"error": "Failed to fetch users"}), 500
+        return jsonify({"error": "Failed to fetch users", "message": str(e)}), 500
+
 
 @user_bp.route("/users", methods=["POST"])
 @jwt_required()
