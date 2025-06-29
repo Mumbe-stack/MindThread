@@ -10,10 +10,9 @@ const Home = () => {
       <div className="relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-100/20 to-purple-100/20"></div>
-        
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            
             {/* Left Content */}
             <div className="text-center lg:text-left">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 leading-tight">
@@ -22,12 +21,12 @@ const Home = () => {
                   MindThread
                 </span>
               </h1>
-              
+
               <p className="mt-6 text-xl text-gray-600 leading-relaxed">
-                A modern blogging platform to share ideas, stories, and insights with the world. 
+                A modern blogging platform to share ideas, stories, and insights with the world.
                 Connect with readers, express your creativity, and build your digital presence.
               </p>
-              
+
               <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
                   to={user ? "/posts" : "/login"}
@@ -38,7 +37,7 @@ const Home = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </Link>
-                
+
                 {!user && (
                   <Link
                     to="/register"
@@ -51,23 +50,26 @@ const Home = () => {
 
               {!user && (
                 <p className="mt-4 text-sm text-gray-500 text-center lg:text-left">
-                  Already have an account? <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">Sign in here</Link>
+                  Already have an account?{" "}
+                  <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">
+                    Sign in here
+                  </Link>
                 </p>
               )}
             </div>
-            
+
             {/* Right Visual Element - CSS Art instead of image */}
             <div className="relative flex justify-center lg:justify-end">
               <div className="relative w-80 h-80 sm:w-96 sm:h-96">
                 {/* Main Circle */}
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full animate-pulse"></div>
-                
+
                 {/* Floating Elements */}
                 <div className="absolute top-8 left-8 w-16 h-16 bg-gradient-to-br from-pink-400 to-rose-500 rounded-2xl rotate-12 animate-bounce delay-300"></div>
                 <div className="absolute top-12 right-12 w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full animate-bounce delay-700"></div>
                 <div className="absolute bottom-16 left-16 w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl -rotate-12 animate-bounce delay-500"></div>
                 <div className="absolute bottom-8 right-8 w-14 h-14 bg-gradient-to-br from-violet-400 to-purple-500 rounded-2xl rotate-45 animate-bounce delay-1000"></div>
-                
+
                 {/* Center Icon */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg">
@@ -93,7 +95,7 @@ const Home = () => {
               Everything you need to create, share, and discover amazing content in one beautiful platform.
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-8">
             {/* Feature 1 */}
             <div className="text-center group p-6 rounded-2xl hover:bg-gray-50 transition-all duration-300">
@@ -107,7 +109,7 @@ const Home = () => {
                 Create beautiful posts with our intuitive editor. Express your ideas with style and clarity that captivates your readers.
               </p>
             </div>
-            
+
             {/* Feature 2 */}
             <div className="text-center group p-6 rounded-2xl hover:bg-gray-50 transition-all duration-300">
               <div className="w-16 h-16 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-200">
@@ -120,7 +122,7 @@ const Home = () => {
                 Connect with passionate writers and readers. Share ideas, get feedback, and build meaningful relationships around great content.
               </p>
             </div>
-            
+
             {/* Feature 3 */}
             <div className="text-center group p-6 rounded-2xl hover:bg-gray-50 transition-all duration-300">
               <div className="w-16 h-16 bg-gradient-to-r from-rose-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-200">
@@ -139,14 +141,13 @@ const Home = () => {
 
       {/* CTA Section */}
       <div className="py-16 bg-gradient-to-r from-indigo-600 to-purple-600 relative overflow-hidden">
-        {/* Background decoration */}
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute top-0 left-0 w-full h-full">
           <div className="absolute top-10 left-10 w-32 h-32 bg-white/10 rounded-full"></div>
           <div className="absolute bottom-10 right-10 w-40 h-40 bg-white/5 rounded-full"></div>
           <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-white/10 rounded-full"></div>
         </div>
-        
+
         <div className="relative max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
             Ready to Share Your Ideas?
@@ -154,7 +155,7 @@ const Home = () => {
           <p className="text-xl text-indigo-100 mb-8 max-w-2xl mx-auto leading-relaxed">
             Join MindThread today and start building your digital presence. Your voice matters, and your stories deserve to be heard.
           </p>
-          
+
           {!user && (
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
@@ -174,32 +175,20 @@ const Home = () => {
               </Link>
             </div>
           )}
-          
+
           {user && (
             <div className="space-y-4">
               <Link
                 to="/posts/new"
                 className="inline-flex items-center justify-center px-8 py-4 bg-white text-indigo-600 text-lg font-semibold rounded-xl hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
               >
-                Create Your First Post
+                Engage with other bloggers
                 <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </Link>
-              <p className="text-indigo-100">
-                Welcome back! Ready to share your next great idea?
-              </p>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Simple footer section */}
-      <div className="py-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-gray-600">
-            Made with ❤️ for writers and readers everywhere
-          </p>
         </div>
       </div>
     </div>
