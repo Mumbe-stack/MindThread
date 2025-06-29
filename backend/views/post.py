@@ -258,66 +258,106 @@ def get_post(post_id):
         logger.error(f"Error fetching post {post_id}: {e}")
         return jsonify({'error':'Failed to fetch post','message':str(e)}), 500
 
+
 @post_bp.route('/posts/<int:post_id>', methods=['PATCH'])
 @jwt_required()
 def update_post(post_id):
-   
+    """Update a post - only the author can edit their own posts"""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
+        
+        # Debug logging
+        logger.info(f"Update attempt - Post ID: {post_id}, Current User ID: {current_user_id}, Type: {type(current_user_id)}")
+        
         post = Post.query.get(post_id)
-
         if not post:
+            logger.warning(f"Post {post_id} not found")
             return jsonify({'error': 'Post not found'}), 404
 
+        # Debug the ownership check
+        logger.info(f"Post owner ID: {post.user_id}, Type: {type(post.user_id)}")
+        logger.info(f"Current user ID: {current_user_id}, Type: {type(current_user_id)}")
+        logger.info(f"Ownership check: {post.user_id} == {current_user_id} = {post.user_id == current_user_id}")
         
-        if post.user_id != current_user_id:
-            return jsonify({'error': 'Permission denied'}), 403
+        # Ensure both values are the same type (convert to int if needed)
+        post_user_id = int(post.user_id) if post.user_id else None
+        current_user_id_int = int(current_user_id) if current_user_id else None
+        
+        logger.info(f"After type conversion - Post owner: {post_user_id}, Current user: {current_user_id_int}")
+        
+        # Authorization check with detailed logging
+        if post_user_id != current_user_id_int:
+            logger.warning(f"Permission denied - User {current_user_id_int} cannot edit post {post_id} owned by {post_user_id}")
+            return jsonify({
+                'error': 'Permission denied',
+                'debug': {
+                    'post_owner_id': post_user_id,
+                    'current_user_id': current_user_id_int,
+                    'post_id': post_id
+                }
+            }), 403
 
+        # Validate request data
         data = request.get_json(silent=True)
         if not data:
             return jsonify({'error': 'No JSON body provided'}), 400
 
         requires_reapproval = False
 
+        # Update title if provided
         if 'title' in data:
             title = data['title'].strip()
             if not title:
                 return jsonify({'error': 'Title cannot be empty'}), 400
             if post.title != title:
+                logger.info(f"Updating title from '{post.title}' to '{title}'")
                 post.title = title
                 requires_reapproval = True
 
+        # Update content if provided
         if 'content' in data:
             content = data['content'].strip()
             if not content:
                 return jsonify({'error': 'Content cannot be empty'}), 400
             if post.content != content:
+                logger.info(f"Updating content (length: {len(content)} chars)")
                 post.content = content
                 requires_reapproval = True
 
+        # Update tags if provided
         if 'tags' in data:
-            post.tags = data['tags'].strip() if data['tags'] else None
+            new_tags = data['tags'].strip() if data['tags'] else None
+            if post.tags != new_tags:
+                logger.info(f"Updating tags from '{post.tags}' to '{new_tags}'")
+                post.tags = new_tags
 
-      
+        # Handle reapproval logic
         if requires_reapproval and post.is_approved:
+            logger.info("Post requires reapproval due to content changes")
             post.is_approved = False
 
+        # Update timestamp
         post.updated_at = datetime.utcnow()
         db.session.commit()
 
+        # Prepare response
         response_data = serialize_post(post, current_user_id)
         if requires_reapproval:
             response_data['message'] = 'Post updated successfully and is pending admin approval'
         else:
             response_data['message'] = 'Post updated successfully'
 
+        logger.info(f"Post {post_id} updated successfully by user {current_user_id}")
         return jsonify(response_data), 200
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error updating post {post_id}: {e}")
-        return jsonify({'error': 'Failed to update post', 'message': str(e)}), 500
+        logger.error(f"Error updating post {post_id}: {e}", exc_info=True)
+        return jsonify({
+            'error': 'Failed to update post',
+            'message': str(e)
+        }), 500
 
 
 @post_bp.route('/posts/<int:post_id>', methods=['DELETE'])
