@@ -262,12 +262,12 @@ def get_post(post_id):
 @post_bp.route('/posts/<int:post_id>', methods=['PATCH'])
 @jwt_required()
 def update_post(post_id):
-    """Update a post - only the author can edit their own posts"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        # Debug logging
+     
         logger.info(f"Update attempt - Post ID: {post_id}, Current User ID: {current_user_id}, Type: {type(current_user_id)}")
         
         post = Post.query.get(post_id)
@@ -275,18 +275,18 @@ def update_post(post_id):
             logger.warning(f"Post {post_id} not found")
             return jsonify({'error': 'Post not found'}), 404
 
-        # Debug the ownership check
+       
         logger.info(f"Post owner ID: {post.user_id}, Type: {type(post.user_id)}")
         logger.info(f"Current user ID: {current_user_id}, Type: {type(current_user_id)}")
         logger.info(f"Ownership check: {post.user_id} == {current_user_id} = {post.user_id == current_user_id}")
         
-        # Ensure both values are the same type (convert to int if needed)
+        
         post_user_id = int(post.user_id) if post.user_id else None
         current_user_id_int = int(current_user_id) if current_user_id else None
         
         logger.info(f"After type conversion - Post owner: {post_user_id}, Current user: {current_user_id_int}")
         
-        # Authorization check with detailed logging
+        
         if post_user_id != current_user_id_int:
             logger.warning(f"Permission denied - User {current_user_id_int} cannot edit post {post_id} owned by {post_user_id}")
             return jsonify({
@@ -298,14 +298,14 @@ def update_post(post_id):
                 }
             }), 403
 
-        # Validate request data
+       
         data = request.get_json(silent=True)
         if not data:
             return jsonify({'error': 'No JSON body provided'}), 400
 
         requires_reapproval = False
 
-        # Update title if provided
+       
         if 'title' in data:
             title = data['title'].strip()
             if not title:
@@ -315,7 +315,7 @@ def update_post(post_id):
                 post.title = title
                 requires_reapproval = True
 
-        # Update content if provided
+        
         if 'content' in data:
             content = data['content'].strip()
             if not content:
@@ -325,23 +325,23 @@ def update_post(post_id):
                 post.content = content
                 requires_reapproval = True
 
-        # Update tags if provided
+       
         if 'tags' in data:
             new_tags = data['tags'].strip() if data['tags'] else None
             if post.tags != new_tags:
                 logger.info(f"Updating tags from '{post.tags}' to '{new_tags}'")
                 post.tags = new_tags
 
-        # Handle reapproval logic
+        
         if requires_reapproval and post.is_approved:
             logger.info("Post requires reapproval due to content changes")
             post.is_approved = False
 
-        # Update timestamp
+       
         post.updated_at = datetime.utcnow()
         db.session.commit()
 
-        # Prepare response
+        
         response_data = serialize_post(post, current_user_id)
         if requires_reapproval:
             response_data['message'] = 'Post updated successfully and is pending admin approval'
