@@ -720,3 +720,43 @@ def get_content_stats(user_id=None):
     except Exception as e:
         logger.error(f"Error getting content stats: {e}")
         return None
+def serialize_comment(comment):
+    return {
+        "id": comment.id,
+        "content": comment.content,
+        "post_id": comment.post_id,
+        "parent_id": comment.parent_id,
+        "user_id": comment.user_id,
+        "author": {
+            "id": comment.user.id,
+            "username": comment.user.username
+        } if comment.user else None,
+        "created_at": comment.created_at.isoformat() if comment.created_at else None,
+        "updated_at": comment.updated_at.isoformat() if comment.updated_at else None,
+        "is_approved": comment.is_approved,
+        "is_flagged": comment.is_flagged,
+        "likes_count": len(comment.likes) if hasattr(comment, 'likes') else 0,
+        "vote_score": sum(v.value for v in comment.votes) if hasattr(comment, 'votes') else 0
+    }
+   
+def serialize_post(post, current_user_id=None):
+    return {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "tags": post.tags,
+        "user_id": post.user_id,  # Required for frontend check
+        "author": {
+            "id": post.user.id,
+            "username": post.user.username,
+            "avatar_url": post.user.avatar_url if hasattr(post.user, 'avatar_url') else None
+        },
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+        "updated_at": post.updated_at.isoformat() if post.updated_at else None,
+        "is_approved": post.is_approved,
+        "is_flagged": post.is_flagged,
+        "likes_count": len(post.likes) if hasattr(post, 'likes') else 0,
+        "vote_score": sum(v.value for v in post.votes) if hasattr(post, 'votes') else 0,
+        "userVote": next((v.value for v in post.votes if v.user_id == current_user_id), None) if current_user_id else None,
+        "comments": [serialize_comment(c) for c in post.comments] if hasattr(post, 'comments') else []
+    }
