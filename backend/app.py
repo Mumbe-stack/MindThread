@@ -23,8 +23,7 @@ CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": [
-                "https://mindthread-1.onrender.com",              
+            "origins": [            
                 "https://mindthreadbloggingapp.netlify.app",      
                 "http://localhost:5173",
                 "http://localhost:3000",
