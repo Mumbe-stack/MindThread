@@ -8,15 +8,29 @@ MindThread is a full-stack web application that combines a modern blogging exper
 ## Features
 
 ### User Features
+### A Regular User Can: 
+Register an account using a unique username, email, and password. 
+Login securely using credentials. 
+Update their profile details (username, email, bio). 
+Publish a blog post, including a title, content, and optional tags or categories. 
+View a list of all blog posts (searchable by title, category, or author). 
+View individual blog posts, including full content and comments. 
+Edit or delete their posts if needed. 
+Comment on any blog post, contributing to a discussion or sharing feedback. 
+Edit or delete their comments. 
+Vote on blog posts and comments (upvote or downvote to indicate quality or relevance). 
+View their profile, which includes a summary of their posted blogs, comments, and voting activity. 
 
-User authentication (register/login/logout)
-Create, edit, delete blog posts
-Comment on posts (supports nested/threaded comments)
-Upvote/downvote posts and comments
-View author profiles and contribution history
+### An Admin Can: 
+Login to a protected admin dashboard. 
+View a list of all registered users on the platform. 
+Approve or unpublish blog posts (if moderation is enabled). 
+Hide or delete inappropriate comments that do not meet community guidelines. 
+Manage all content, including blog posts, comments, votes, and users. 
+If necessary, update or delete any post, comment, or user for moderation or policy enforcement. 
+
 
 ### Admin Features
-
 Admin dashboard for:
 Content moderation (approve/flag/remove posts/comments)
 User management

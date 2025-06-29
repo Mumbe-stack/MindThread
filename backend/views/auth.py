@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 from flask_jwt_extended import (
     create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 )
@@ -8,22 +7,12 @@ from flask_mail import Message
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, and_
 import re
-import os
 import traceback
 
 from models import db, User, TokenBlocklist, Post, Comment
 
 # Create blueprint - no url_prefix since app.py handles it
 auth_bp = Blueprint("auth", __name__)
-
-# 🔧 ADDED: Avatar upload configuration
-UPLOAD_FOLDER = 'uploads/avatars'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def validate_email(email):
     """Validate email format"""
@@ -123,8 +112,7 @@ def register():
             created_at=datetime.now(timezone.utc),
             is_blocked=False,
             is_admin=False,
-            is_active=True,
-            avatar_url=None  # 🔧 ADDED: Initialize avatar as None
+            is_active=True
         )
         
         db.session.add(new_user)
@@ -167,8 +155,7 @@ The MindThread Team"""
                 "email": new_user.email,
                 "is_admin": new_user.is_admin,
                 "is_blocked": new_user.is_blocked,
-                "is_active": new_user.is_active,
-                "avatar_url": new_user.avatar_url  # 🔧 ADDED: Include avatar in response
+                "is_active": new_user.is_active
             },
             "access_token": access_token,
             "refresh_token": refresh_token
@@ -244,8 +231,7 @@ def login():
                 "email": user.email,
                 "is_admin": getattr(user, 'is_admin', False),
                 "is_blocked": getattr(user, 'is_blocked', False),
-                "is_active": getattr(user, 'is_active', True),
-                "avatar_url": getattr(user, 'avatar_url', None)  # 🔧 ADDED: Include avatar in login response
+                "is_active": getattr(user, 'is_active', True)
             }
         }), 200
         
@@ -257,7 +243,7 @@ def login():
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
-    """Get current authenticated user information - UPDATED with avatar support"""
+    """Get current authenticated user information"""
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
@@ -277,7 +263,6 @@ def get_current_user():
                 "is_admin": getattr(user, 'is_admin', False),
                 "is_blocked": getattr(user, 'is_blocked', False),
                 "is_active": getattr(user, 'is_active', True),
-                "avatar_url": getattr(user, 'avatar_url', None),  # 🔧 ADDED: Include avatar
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "updated_at": user.updated_at.isoformat() if hasattr(user, 'updated_at') and user.updated_at else None
             }
@@ -354,8 +339,7 @@ def update_current_user():
                 "email": user.email,
                 "is_admin": user.is_admin,
                 "is_blocked": user.is_blocked,
-                "is_active": getattr(user, 'is_active', True),
-                "avatar_url": getattr(user, 'avatar_url', None)  # 🔧 ADDED: Include avatar
+                "is_active": getattr(user, 'is_active', True)
             }
         }), 200
         
@@ -496,97 +480,13 @@ def verify_token():
                 "email": user.email,
                 "is_admin": getattr(user, 'is_admin', False),
                 "is_blocked": getattr(user, 'is_blocked', False),
-                "is_active": getattr(user, 'is_active', True),
-                "avatar_url": getattr(user, 'avatar_url', None)  # 🔧 ADDED: Include avatar
+                "is_active": getattr(user, 'is_active', True)
             }
         }), 200
         
     except Exception as e:
         current_app.logger.error(f"Token verification error: {e}")
         return jsonify({"error": "Token verification failed"}), 500
-
-# 🔧 FIXED: Avatar upload implementation
-@auth_bp.route("/upload-avatar", methods=["POST"])
-@jwt_required()
-def upload_avatar():
-    """Upload user avatar - FULLY IMPLEMENTED"""
-    try:
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-        
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        
-        if getattr(user, 'is_blocked', False):
-            return jsonify({"error": "Account is blocked"}), 403
-
-        # Check if file is in request
-        if 'avatar' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-
-        file = request.files['avatar']
-        
-        if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
-
-        if file and allowed_file(file.filename):
-            # Create upload directory if it doesn't exist
-            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-            
-            # Generate secure filename
-            filename = secure_filename(file.filename)
-            # Add user ID to filename to avoid conflicts
-            name, ext = os.path.splitext(filename)
-            filename = f"user_{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
-            
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
-            
-            # Check file size
-            file.seek(0, os.SEEK_END)
-            file_size = file.tell()
-            file.seek(0)
-            
-            if file_size > MAX_FILE_SIZE:
-                return jsonify({"error": "File too large. Maximum size is 5MB"}), 413
-            
-            # Save file
-            file.save(file_path)
-            
-            # Update user avatar path in database
-            avatar_url = f"/uploads/avatars/{filename}"
-            user.avatar_url = avatar_url
-            
-            if hasattr(user, 'updated_at'):
-                user.updated_at = datetime.now(timezone.utc)
-            
-            db.session.commit()
-
-            current_app.logger.info(f"Avatar uploaded for user {user.id}: {avatar_url}")
-
-            return jsonify({
-                "success": True,
-                "message": "Avatar uploaded successfully",
-                "avatar_url": avatar_url,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "avatar_url": avatar_url
-                }
-            }), 200
-        else:
-            return jsonify({"error": "Invalid file type. Allowed types: png, jpg, jpeg, gif"}), 400
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Failed to upload avatar: {e}")
-        return jsonify({"error": "Failed to upload avatar"}), 500
-
-# 🔧 ADDED: Alternative avatar upload endpoint to match frontend expectations
-@auth_bp.route("/users/me/avatar", methods=["POST"])
-@jwt_required()
-def upload_avatar_alt():
-    """Alternative avatar upload endpoint to match frontend expectations"""
-    return upload_avatar()
 
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
@@ -613,6 +513,15 @@ def verify_email():
         "status": "coming_soon"
     }), 501
 
+@auth_bp.route("/upload-avatar", methods=["POST"])
+@jwt_required()
+def upload_avatar():
+    """Upload user avatar (placeholder for future implementation)"""
+    return jsonify({
+        "message": "Avatar upload not implemented yet",
+        "status": "coming_soon"
+    }), 501
+
 # Test endpoint for development
 @auth_bp.route("/test", methods=["GET"])
 def test_auth():
@@ -627,9 +536,7 @@ def test_auth():
             "refresh": "POST /api/refresh",
             "me": "GET /api/me",
             "change_password": "POST /api/change-password",
-            "verify_token": "GET /api/verify-token",
-            "upload_avatar": "POST /api/upload-avatar",  # 🔧 ADDED
-            "upload_avatar_alt": "POST /api/users/me/avatar"  # 🔧 ADDED
+            "verify_token": "GET /api/verify-token"
         },
         "features": [
             "Email/username login support",
@@ -638,8 +545,7 @@ def test_auth():
             "Comprehensive validation",
             "Welcome email notifications",
             "Security logging",
-            "Profile management",
-            "Avatar upload support"  # 🔧 ADDED
+            "Profile management"
         ]
     }), 200
 
