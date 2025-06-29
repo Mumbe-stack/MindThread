@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
-// Fixed API URL to match your deployed backend
+
 const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const Users = () => {
@@ -15,7 +15,7 @@ const Users = () => {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [actionLoading, setActionLoading] = useState({});
 
-  // Enhanced API request function
+
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
       const response = await fetch(url, {
@@ -34,7 +34,7 @@ const Users = () => {
     }
   };
 
-  // Check authentication and admin access
+
   useEffect(() => {
     if (!isAuthenticated) {
       toast.error("Please log in to view users");
@@ -51,7 +51,7 @@ const Users = () => {
     fetchUsers();
   }, [isAuthenticated, isAdmin, navigate, token]);
 
-  // Filter users based on search term
+
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredUsers(users);
@@ -89,7 +89,7 @@ const Users = () => {
       const data = await response.json();
       console.log("Users data received:", data);
       
-      // Handle both array and object responses
+ 
       const usersArray = Array.isArray(data) ? data : (data.users || []);
       setUsers(usersArray);
       toast.success(`Loaded ${usersArray.length} users`);
@@ -108,7 +108,7 @@ const Users = () => {
       return;
     }
 
-    // Prevent action on current user
+    
     if (userId === user?.id) {
       toast.error("You cannot block/unblock yourself");
       return;
@@ -131,7 +131,7 @@ const Users = () => {
         throw new Error(errorData.error || `Failed to ${action} user`);
       }
 
-      // Update local state
+     
       const updatedUsers = users.map((u) =>
         u.id === userId ? { ...u, is_blocked: shouldBlock } : u
       );
@@ -153,7 +153,7 @@ const Users = () => {
       return;
     }
 
-    // Prevent deletion of current user
+   
     if (userId === user?.id) {
       toast.error("You cannot delete yourself");
       return;
@@ -178,7 +178,7 @@ const Users = () => {
         throw new Error(errorData.error || "Failed to delete user");
       }
 
-      // Remove user from local state
+     
       const updatedUsers = users.filter(u => u.id !== userId);
       setUsers(updatedUsers);
       
@@ -215,7 +215,7 @@ const Users = () => {
         throw new Error(errorData.error || `Failed to ${action}`);
       }
 
-      // Update local state
+    
       const updatedUsers = users.map((u) =>
         u.id === userId ? { ...u, is_admin: shouldMakeAdmin } : u
       );
@@ -231,7 +231,7 @@ const Users = () => {
     }
   };
 
-  // Show loading state
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto p-6">
@@ -243,7 +243,7 @@ const Users = () => {
     );
   }
 
-  // Show access denied if not authenticated or not admin
+ 
   if (!isAuthenticated || !isAdmin) {
     return (
       <div className="max-w-5xl mx-auto p-6">
@@ -413,7 +413,7 @@ const Users = () => {
         </div>
       )}
 
-      {/* Debug Info (Development Only) */}
+    
       {import.meta.env.DEV && (
         <div className="mt-8 p-4 bg-gray-100 rounded-lg text-xs text-gray-600">
           <h4 className="font-bold mb-2">🔍 Debug Info</h4>

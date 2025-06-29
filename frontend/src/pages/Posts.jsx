@@ -22,7 +22,7 @@ const Posts = () => {
     if (token) headers.Authorization = `Bearer ${token}`;
 
     try {
-      // Use admin endpoint if user is admin, regular endpoint otherwise
+      
       const endpoint = user?.is_admin 
         ? `${VITE_API_URL}/api/admin/posts` 
         : `${VITE_API_URL}/api/posts`;
@@ -47,7 +47,7 @@ const Posts = () => {
       const data = await res.json();
       const postsArray = Array.isArray(data) ? data : [];
 
-      // Posts now come with all stats from backend, no need for separate fetch
+      
       return postsArray;
     } catch (err) {
       throw new Error(err.message || "Failed to fetch posts");

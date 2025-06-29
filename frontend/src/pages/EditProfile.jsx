@@ -9,27 +9,27 @@ const EditProfile = () => {
   const { user, token, loading } = useAuth();
   const navigate = useNavigate();
   
-  // Profile form state
+
   const [profileData, setProfileData] = useState({
     username: "",
     email: "",
   });
   
-  // Password form state
+
   const [passwordData, setPasswordData] = useState({
     current_password: "",
     new_password: "",
     confirm_password: "",
   });
   
-  // UI state
+
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [errors, setErrors] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Initialize form with user data
+
   useEffect(() => {
     if (user) {
       setProfileData({
@@ -39,14 +39,14 @@ const EditProfile = () => {
     }
   }, [user]);
 
-  // Redirect if not authenticated
+
   useEffect(() => {
     if (!loading && !token && !user) {
       navigate("/login");
     }
   }, [token, loading, user, navigate]);
 
-  // Check for changes
+
   useEffect(() => {
     if (user) {
       const hasProfileChanges = 
@@ -105,7 +105,7 @@ const EditProfile = () => {
   const validateProfileForm = () => {
     const newErrors = {};
 
-    // Username validation
+
     if (!profileData.username.trim()) {
       newErrors.username = "Username is required";
     } else if (profileData.username.trim().length < 3) {
@@ -116,7 +116,7 @@ const EditProfile = () => {
       newErrors.username = "Username can only contain letters, numbers, and underscores";
     }
 
-    // Email validation
+  
     if (!profileData.email.trim()) {
       newErrors.email = "Email is required";
     } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(profileData.email.trim())) {
@@ -130,12 +130,12 @@ const EditProfile = () => {
   const validatePasswordForm = () => {
     const newErrors = {};
 
-    // Current password validation
+
     if (!passwordData.current_password) {
       newErrors.current_password = "Current password is required";
     }
 
-    // New password validation
+   
     if (!passwordData.new_password) {
       newErrors.new_password = "New password is required";
     } else if (passwordData.new_password.length < 6) {
@@ -144,14 +144,14 @@ const EditProfile = () => {
       newErrors.new_password = "Password must be less than 100 characters";
     }
 
-    // Confirm password validation
+    
     if (!passwordData.confirm_password) {
       newErrors.confirm_password = "Please confirm your new password";
     } else if (passwordData.new_password !== passwordData.confirm_password) {
       newErrors.confirm_password = "Passwords do not match";
     }
 
-    // Check if new password is different from current
+  
     if (passwordData.current_password === passwordData.new_password) {
       newErrors.new_password = "New password must be different from current password";
     }
@@ -190,7 +190,7 @@ const EditProfile = () => {
       console.log("Profile update success:", result);
       toast.success("Profile updated successfully!");
       
-      // Navigate back to profile page
+    
       navigate("/profile");
 
     } catch (error) {
@@ -236,7 +236,7 @@ const EditProfile = () => {
       console.log("Password update success:", result);
       toast.success("Password updated successfully!");
       
-      // Reset password form
+    
       setPasswordData({
         current_password: "",
         new_password: "",
@@ -267,7 +267,7 @@ const EditProfile = () => {
       [name]: value
     }));
     
-    // Clear field-specific errors when user starts typing
+   
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -283,7 +283,7 @@ const EditProfile = () => {
       [name]: value
     }));
     
-    // Clear field-specific errors when user starts typing
+   
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -568,7 +568,7 @@ const EditProfile = () => {
         )}
       </div>
 
-      {/* Debug Panel (Development Only) */}
+    
       {import.meta.env.DEV && (
         <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm z-50">
           <h4 className="font-bold mb-2">🔍 Edit Profile Debug</h4>

@@ -12,7 +12,7 @@ const Comments = ({ postId }) => {
   const [votesLoading, setVotesLoading] = useState({});
   const [error, setError] = useState("");
 
-  // Fetch comments (via the post endpoint)
+ 
   const fetchComments = async () => {
     const headers = { "Content-Type": "application/json", Accept: "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -27,7 +27,7 @@ const Comments = ({ postId }) => {
       throw new Error(`HTTP ${res.status}: ${txt}`);
     }
     const data = await res.json();
-    // Initialize vote fields
+  
     return (data.comments || []).map((c) => ({
       ...c,
       vote_score: 0,
@@ -37,7 +37,7 @@ const Comments = ({ postId }) => {
     }));
   };
 
-  // Fetch vote score for one comment
+
   const fetchCommentVotes = async (commentId) => {
     try {
       const res = await fetch(`${VITE_API_URL}/api/votes/comment/${commentId}/score`);
@@ -55,7 +55,7 @@ const Comments = ({ postId }) => {
     }
   };
 
-  // Vote on a comment
+
   const handleVote = async (commentId, value) => {
     if (!user || !token) {
       toast.error("Please login to vote");
@@ -100,7 +100,7 @@ const Comments = ({ postId }) => {
     }
   };
 
-  // Admin-only flag/unflag
+ 
   const handleFlag = async (commentId, isFlagged) => {
     if (!user || !token) {
       toast.error("Login required");
@@ -139,7 +139,7 @@ const Comments = ({ postId }) => {
     }
   };
 
-  // Single comment component
+  
   const CommentItem = ({ comment }) => (
     <div className="border rounded-lg p-4 mb-4 bg-white">
       <div className="flex justify-between items-start">

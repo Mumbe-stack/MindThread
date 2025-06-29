@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Initialize auth state from localStorage
+ 
   useEffect(() => {
     const initializeAuth = () => {
       try {
@@ -30,12 +30,12 @@ export const AuthProvider = ({ children }) => {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
           
-          // Verify token is still valid
+          
           verifyToken(storedToken);
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
-        // Clear invalid data
+        
         localStorage.removeItem("token");
         localStorage.removeItem("user");
       } finally {
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, []);
 
-  // Verify token validity
+ 
   const verifyToken = async (tokenToVerify = token) => {
     if (!tokenToVerify) return false;
 
@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
         }
         return true;
       } else {
-        // Token is invalid
+       
         logout();
         return false;
       }
@@ -79,7 +79,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Enhanced authenticated request function
+  
   const authenticatedRequest = async (url, options = {}) => {
     if (!token) {
       throw new Error("No authentication token available");
@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch(url, finalOptions);
 
-      // Handle token expiration
+      
       if (response.status === 401) {
         logout();
         toast.error("Session expired. Please log in again.");
@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 🔧 FIXED: Login function to handle correct server response format
+
   const login = async (credentials) => {
     try {
       setLoading(true);
@@ -134,18 +134,18 @@ export const AuthProvider = ({ children }) => {
       console.log("Login response:", { ...data, access_token: data.access_token ? "[PRESENT]" : "[MISSING]" });
 
       if (response.ok && data.success) {
-        // 🔧 FIXED: Handle the correct nested response format
+     
         const { access_token, refresh_token, user: userData, message } = data;
         
         if (access_token && userData) {
-          // Use the nested user object from the server response
+       
           const userInfo = {
             id: userData.id,
             username: userData.username,
             email: userData.email,
             is_admin: userData.is_admin || false,
             is_blocked: userData.is_blocked || false,
-            is_active: userData.is_active !== false, // default to true if not specified
+            is_active: userData.is_active !== false, 
             created_at: userData.created_at,
             updated_at: userData.updated_at
           };
@@ -155,11 +155,11 @@ export const AuthProvider = ({ children }) => {
           setToken(access_token);
           setUser(userInfo);
           
-          // Store in localStorage
+          
           localStorage.setItem("token", access_token);
           localStorage.setItem("user", JSON.stringify(userInfo));
           
-          // Store refresh token if provided
+       
           if (refresh_token) {
             localStorage.setItem("refresh_token", refresh_token);
           }
@@ -186,7 +186,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 🔧 FIXED: Register function to handle correct server response format
+ 
   const register = async (userData) => {
     try {
       setLoading(true);
@@ -207,11 +207,11 @@ export const AuthProvider = ({ children }) => {
       console.log("Registration response:", { ...data, access_token: data.access_token ? "[PRESENT]" : "[MISSING]" });
 
       if (response.ok && data.success) {
-        // 🔧 FIXED: Handle the correct nested response format
+     
         const { access_token, refresh_token, user: userInfo, message } = data;
         
         if (access_token && userInfo) {
-          // Use the nested user object from the server response
+       
           const newUser = {
             id: userInfo.id,
             username: userInfo.username,
@@ -228,11 +228,11 @@ export const AuthProvider = ({ children }) => {
           setToken(access_token);
           setUser(newUser);
           
-          // Store in localStorage
+         
           localStorage.setItem("token", access_token);
           localStorage.setItem("user", JSON.stringify(newUser));
           
-          // Store refresh token if provided
+        
           if (refresh_token) {
             localStorage.setItem("refresh_token", refresh_token);
           }
@@ -260,11 +260,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout function
+
   const logout = async (showMessage = true) => {
     try {
       if (token) {
-        // Call logout endpoint to invalidate token on server
+      
         await fetch(`${API_URL}/api/logout`, {
           method: "POST",
           headers: {
@@ -276,14 +276,14 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Logout request failed:", error);
-      // Continue with local logout even if server request fails
+    
     } finally {
-      // Clear local state
+  
       setUser(null);
       setToken(null);
       setError(null);
       
-      // Clear localStorage
+      
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("refresh_token");
@@ -294,7 +294,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Delete user account
+
   const deleteUser = async () => {
     try {
       setLoading(true);
@@ -308,7 +308,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.ok) {
-        // Log out after successful deletion
+  
         await logout(false);
         return { success: true };
       } else {
@@ -325,7 +325,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Change password function
+
   const changePassword = async (passwordData) => {
     try {
       setLoading(true);
@@ -358,7 +358,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Forgot password function
+
   const forgotPassword = async (email) => {
     try {
       setLoading(true);
@@ -395,7 +395,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Refresh token function
+ 
   const refreshToken = async () => {
     try {
       const refresh_token = localStorage.getItem("refresh_token");
@@ -425,7 +425,7 @@ export const AuthProvider = ({ children }) => {
         }
       }
       
-      // If refresh fails, logout
+     
       logout(false);
       return false;
     } catch (error) {
@@ -435,7 +435,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Update user profile
+
   const updateProfile = async (profileData) => {
     try {
       setLoading(true);
@@ -471,50 +471,50 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Check if user is admin
+
   const isAdmin = () => {
     return user && user.is_admin === true;
   };
 
-  // Check if user is blocked
+
   const isBlocked = () => {
     return user && user.is_blocked === true;
   };
 
-  // Check if user is active
+
   const isActive = () => {
     return user && user.is_active !== false;
   };
 
   const value = {
-    // State
+  
     user,
     token,
     loading,
     error,
     
-    // Authentication functions
+  
     login,
     register,
     logout,
     deleteUser,
     
-    // Profile management
+ 
     changePassword,
     forgotPassword,
     updateProfile,
     
-    // Token management
+  
     verifyToken,
     refreshToken,
     
-    // Utility functions
+  
     authenticatedRequest,
     isAdmin,
     isBlocked,
     isActive,
     
-    // Computed properties
+ 
     isAuthenticated: !!user && !!token,
     isGuest: !user || !token,
   };

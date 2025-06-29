@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 import traceback
 import logging
 
-# Import utils if available, otherwise define a simple decorator
+
 try:
     from .utils import block_check_required
 except ImportError:
     def block_check_required(f):
-        """Simple decorator if utils not available"""
+       
         def wrapper(*args, **kwargs):
             try:
                 current_user_id = get_jwt_identity()
@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 comment_bp = Blueprint('comments', __name__)
 
 def serialize_comment_with_stats(comment, current_user_id=None, include_admin_info=False):
-    """Serialize comment with all stats and user information (NO VOTING)"""
+   
     try:
-        # Get like information
+      
         likes_count = Like.query.filter_by(comment_id=comment.id).count()
         liked_by_user = False
         if current_user_id:
@@ -39,10 +39,10 @@ def serialize_comment_with_stats(comment, current_user_id=None, include_admin_in
                 is not None
             )
         
-        # Get author information
+       
         author = User.query.get(comment.user_id)
         
-        # Basic comment data
+       
         data = {
             'id': comment.id,
             'content': comment.content,
@@ -64,7 +64,7 @@ def serialize_comment_with_stats(comment, current_user_id=None, include_admin_in
             'replies_count': Comment.query.filter_by(parent_id=comment.id, is_approved=True).count(),
         }
         
-        # Add approval-specific information
+     
         if hasattr(comment, 'approved_at'):
             data['approved_at'] = comment.approved_at.isoformat() if comment.approved_at else None
         
@@ -78,7 +78,7 @@ def serialize_comment_with_stats(comment, current_user_id=None, include_admin_in
         else:
             data['has_content_changed'] = False
         
-        # Add admin-specific information
+       
         if include_admin_info and hasattr(comment, 'approved_by') and comment.approved_by:
             approver = User.query.get(comment.approved_by)
             if approver:
@@ -93,7 +93,7 @@ def serialize_comment_with_stats(comment, current_user_id=None, include_admin_in
         
     except Exception as e:
         logger.error(f"Error serializing comment {comment.id}: {e}")
-        # Fallback serialization
+       
         author = User.query.get(comment.user_id)
         return {
             'id': comment.id,
@@ -119,7 +119,7 @@ def serialize_comment_with_stats(comment, current_user_id=None, include_admin_in
 def get_post_comments(post_id):
     """Get comments for a specific post - Hide disapproved comments from general users"""
     try:
-        # Get current user
+      
         current_user_id = None
         current_user = None
         try:
@@ -130,20 +130,20 @@ def get_post_comments(post_id):
         except:
             pass
 
-        # Verify post exists
+      
         post = Post.query.get(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Build query for comments
+       
         query = Comment.query.filter_by(post_id=post_id)
         
-        # Filter by approval status - hide disapproved comments unless user is admin or author
+     
         if current_user and current_user.is_admin:
-            # Admin sees all comments
+         
             pass
         else:
-            # Regular users only see approved comments or their own comments
+         
             if current_user_id:
                 query = query.filter(
                     db.or_(
@@ -152,13 +152,13 @@ def get_post_comments(post_id):
                     )
                 )
             else:
-                # Anonymous users only see approved comments
+             
                 query = query.filter(Comment.is_approved == True)
         
-        # Get comments ordered by creation date
+      
         comments = query.order_by(Comment.created_at.asc()).all()
         
-        # Serialize comments
+        
         include_admin_info = current_user and current_user.is_admin
         comments_data = [
             serialize_comment_with_stats(c, current_user_id, include_admin_info) 
@@ -175,7 +175,7 @@ def get_post_comments(post_id):
 @jwt_required()
 @block_check_required
 def create_post_comment(post_id):
-    """Create a new comment on a specific post"""
+  
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -183,7 +183,7 @@ def create_post_comment(post_id):
         if not current_user:
             return jsonify({"error": "User not found"}), 404
 
-        # Verify post exists
+       
         post = Post.query.get(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
@@ -201,23 +201,23 @@ def create_post_comment(post_id):
         if len(content) > 1000:
             return jsonify({"error": "Comment content too long (max 1000 characters)"}), 400
 
-        # Validate parent comment if provided
+      
         if parent_id:
             try:
                 parent_id = int(parent_id)
                 parent_comment = Comment.query.get(parent_id)
                 if not parent_comment or parent_comment.post_id != post_id:
                     return jsonify({"error": "Invalid parent comment"}), 400
-                # Check if parent comment is approved (can't reply to unapproved comments)
+              
                 if not parent_comment.is_approved and not current_user.is_admin:
                     return jsonify({"error": "Cannot reply to unapproved comment"}), 400
             except ValueError:
                 return jsonify({"error": "Invalid parent_id format"}), 400
 
-        # Comments require approval by default (except for admins)
+       
         is_approved = current_user.is_admin
 
-        # Create comment
+     
         comment = Comment(
             content=content,
             post_id=post_id,
@@ -231,14 +231,14 @@ def create_post_comment(post_id):
         if hasattr(comment, 'updated_at'):
             comment.updated_at = datetime.now(timezone.utc)
 
-        # If admin is creating the comment, auto-approve it
+   
         if is_approved and hasattr(comment, 'approve'):
             comment.approve(current_user)
 
         db.session.add(comment)
         db.session.commit()
 
-        # Serialize the new comment
+      
         include_admin_info = current_user.is_admin
         comment_data = serialize_comment_with_stats(comment, current_user_id, include_admin_info)
         
@@ -256,9 +256,9 @@ def create_post_comment(post_id):
 
 @comment_bp.route("/comments/<int:comment_id>", methods=["GET"])
 def get_comment(comment_id):
-    """Get a specific comment"""
+ 
     try:
-        # Get current user
+    
         current_user_id = None
         current_user = None
         try:
@@ -273,11 +273,11 @@ def get_comment(comment_id):
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Check if user can view this comment
+     
         can_view = (
-            getattr(comment, 'is_approved', True) or  # Comment is approved
-            (current_user and current_user.is_admin) or  # User is admin
-            (current_user_id == comment.user_id)  # User is the author
+            getattr(comment, 'is_approved', True) or 
+            (current_user and current_user.is_admin) or  
+            (current_user_id == comment.user_id)  
         )
 
         if not can_view:
@@ -295,7 +295,7 @@ def get_comment(comment_id):
 @jwt_required()
 @block_check_required
 def update_comment(comment_id):
-    """Update a specific comment - requires re-approval if content changes"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -312,12 +312,12 @@ def update_comment(comment_id):
         if not data:
             return jsonify({"error": "No JSON body provided"}), 400
 
-        # Track if content changes to determine re-approval need
+      
         content_changed = False
         requires_reapproval = False
         message = "Comment updated successfully"
 
-        # Handle content updates
+       
         if 'content' in data:
             new_content = data['content'].strip()
             if not new_content: 
@@ -330,26 +330,25 @@ def update_comment(comment_id):
                 old_content = comment.content
                 comment.content = new_content
                 
-                # Check if this requires re-approval (only for non-admins editing their own comments)
+               
                 if not current_user.is_admin and comment.user_id == current_user_id:
                     if hasattr(comment, 'requires_reapproval'):
                         requires_reapproval = comment.requires_reapproval()
                     elif getattr(comment, 'is_approved', True):
-                        # Fallback: if comment was approved and content changed, needs re-approval
+                     
                         requires_reapproval = True
 
-        # Admin-only fields
         if current_user.is_admin:
             if 'is_approved' in data: 
                 new_approval_state = bool(data['is_approved'])
                 
                 if new_approval_state:
-                    # Admin wants to approve - check if we can
+                   
                     can_approve = (
-                        not getattr(comment, 'is_approved', True) or  # Not currently approved
-                        content_changed or  # Content just changed
-                        (hasattr(comment, 'has_content_changed') and comment.has_content_changed()) or  # Content changed previously
-                        not hasattr(comment, 'approved_at') or comment.approved_at is None  # Never been approved
+                        not getattr(comment, 'is_approved', True) or  
+                        content_changed or  
+                        (hasattr(comment, 'has_content_changed') and comment.has_content_changed()) or  
+                        not hasattr(comment, 'approved_at') or comment.approved_at is None  
                     )
                     
                     if can_approve:
@@ -366,7 +365,7 @@ def update_comment(comment_id):
                             "error": "Comment cannot be approved - no changes detected since last approval"
                         }), 400
                 else:
-                    # Admin wants to disapprove
+                  
                     if hasattr(comment, 'disapprove'):
                         comment.disapprove()
                     else:
@@ -378,14 +377,14 @@ def update_comment(comment_id):
                 flag_action = "flagged" if comment.is_flagged else "unflagged"
                 message = f"Comment {flag_action} successfully"
         else:
-            # Non-admin users need re-approval if they edit content
+           
             if requires_reapproval:
                 comment.is_approved = False
                 comment.approved_by = None
                 comment.approved_at = None
                 message = "Comment updated successfully and is pending admin approval due to content changes"
 
-        # Update timestamp
+       
         if hasattr(comment, 'updated_at'):
             comment.updated_at = datetime.now(timezone.utc)
         
@@ -406,7 +405,7 @@ def update_comment(comment_id):
 @jwt_required()
 @block_check_required
 def delete_comment(comment_id):
-    """Delete a specific comment"""
+  
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -419,10 +418,10 @@ def delete_comment(comment_id):
         if comment.user_id != current_user_id and not current_user.is_admin:
             return jsonify({"error": "Permission denied"}), 403
 
-        # Delete related data first
+      
         Like.query.filter_by(comment_id=comment_id).delete()
         
-        # Delete replies (cascade should handle this, but explicit is better)
+      
         Comment.query.filter_by(parent_id=comment_id).delete()
         
         db.session.delete(comment)
@@ -439,7 +438,7 @@ def delete_comment(comment_id):
 @jwt_required()
 @block_check_required
 def toggle_comment_like(comment_id):
-    """Toggle like on a comment"""
+ 
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -448,11 +447,11 @@ def toggle_comment_like(comment_id):
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Check if user can interact with this comment
+      
         can_interact = (
-            getattr(comment, 'is_approved', True) or  # Comment is approved
-            (current_user and current_user.is_admin) or  # User is admin
-            (current_user_id == comment.user_id)  # User is the author
+            getattr(comment, 'is_approved', True) or  
+            (current_user and current_user.is_admin) or  
+            (current_user_id == comment.user_id)  
         )
 
         if not can_interact:
@@ -488,12 +487,12 @@ def toggle_comment_like(comment_id):
         logger.error(f"Error toggling like on comment {comment_id}: {e}")
         return jsonify({"error": "Failed to toggle like", "message": str(e)}), 500
 
-# General comments endpoint for admin use
+
 @comment_bp.route("/comments", methods=["GET"])
 def list_comments():
-    """Get comments with various filters (mainly for admin use)"""
+    
     try:
-        # Get current user
+    
         current_user_id = None
         current_user = None
         try:
@@ -504,7 +503,7 @@ def list_comments():
         except:
             pass
 
-        # Get query parameters
+       
         post_id = request.args.get("post_id", type=int)
         user_id = request.args.get("user_id", type=int)
         all_comments = request.args.get("all", "").lower() == "true"
@@ -513,22 +512,22 @@ def list_comments():
         flagged_only = request.args.get("flagged", "").lower() == "true"
         limit = min(request.args.get("limit", 100, type=int), 500)
 
-        # Build query
+      
         query = Comment.query
 
-        # Apply filters
+      
         if post_id:
             query = query.filter_by(post_id=post_id)
         if user_id:
             query = query.filter_by(user_id=user_id)
 
-        # Special filters
+    
         if pending_only:
             query = query.filter(Comment.is_approved == False)
         elif flagged_only:
             query = query.filter(Comment.is_flagged == True)
         elif not (current_user and current_user.is_admin and (all_comments or admin_mode)):
-            # Regular users only see approved comments or their own
+           
             if current_user_id:
                 query = query.filter(
                     db.or_(
@@ -539,10 +538,10 @@ def list_comments():
             else:
                 query = query.filter(Comment.is_approved == True)
 
-        # Order and limit
+    
         comments = query.order_by(Comment.created_at.desc()).limit(limit).all()
         
-        # Serialize comments
+      
         include_admin_info = current_user and current_user.is_admin
         comments_data = [
             serialize_comment_with_stats(c, current_user_id, include_admin_info) 
@@ -555,11 +554,11 @@ def list_comments():
         logger.error(f"Error fetching comments: {e}")
         return jsonify({"error": "Failed to fetch comments", "message": str(e)}), 500
 
-# ADMIN ROUTES
+
 @comment_bp.route("/admin/comments/<int:comment_id>/approve", methods=["PATCH"])
 @jwt_required()
 def admin_approve_comment(comment_id):
-    """Admin: Approve or reject a comment - only if changes have been made"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -575,11 +574,11 @@ def admin_approve_comment(comment_id):
         is_approved = bool(data.get('is_approved', True))
         
         if is_approved:
-            # Check if we should approve - only if content changed or never approved
+            
             can_approve = (
-                not getattr(comment, 'is_approved', True) or  # Not currently approved
-                (hasattr(comment, 'has_content_changed') and comment.has_content_changed()) or  # Content changed
-                not hasattr(comment, 'approved_at') or comment.approved_at is None  # Never been approved
+                not getattr(comment, 'is_approved', True) or  
+                (hasattr(comment, 'has_content_changed') and comment.has_content_changed()) or  
+                not hasattr(comment, 'approved_at') or comment.approved_at is None  
             )
             
             if not can_approve:
@@ -587,7 +586,7 @@ def admin_approve_comment(comment_id):
                     "error": "Comment cannot be approved - no changes detected since last approval"
                 }), 400
             
-            # Approve the comment
+            
             if hasattr(comment, 'approve'):
                 comment.approve(current_user)
             else:
@@ -595,7 +594,7 @@ def admin_approve_comment(comment_id):
                 comment.approved_by = current_user_id
                 comment.approved_at = datetime.now(timezone.utc)
         else:
-            # Disapprove the comment
+           
             if hasattr(comment, 'disapprove'):
                 comment.disapprove()
             else:
@@ -621,7 +620,7 @@ def admin_approve_comment(comment_id):
 @comment_bp.route("/admin/comments/<int:comment_id>/flag", methods=["PATCH"])
 @jwt_required()
 def admin_flag_comment(comment_id):
-    """Admin: Flag or unflag a comment"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -656,7 +655,7 @@ def admin_flag_comment(comment_id):
 @comment_bp.route("/admin/comments/pending", methods=["GET"])
 @jwt_required()
 def get_pending_comments():
-    """Admin: Get all comments pending approval"""
+ 
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -664,15 +663,15 @@ def get_pending_comments():
         if not current_user or not current_user.is_admin:
             return jsonify({"error": "Admin access required"}), 403
 
-        # Get pagination parameters
+     
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 20, type=int), 100)
         
-        # Get all comments that are not approved
+        
         pending_query = Comment.query.filter_by(is_approved=False)\
                                     .order_by(Comment.created_at.desc())
         
-        # Paginate if requested
+     
         if request.args.get('paginate', 'false').lower() == 'true':
             pagination = pending_query.paginate(
                 page=page, per_page=per_page, error_out=False
@@ -692,7 +691,7 @@ def get_pending_comments():
             "count": len(comments_data)
         }
         
-        # Add pagination info if requested
+     
         if request.args.get('paginate', 'false').lower() == 'true':
             response_data["pagination"] = {
                 "page": page,
@@ -712,7 +711,7 @@ def get_pending_comments():
 @comment_bp.route("/admin/comments/flagged", methods=["GET"])
 @jwt_required()
 def get_flagged_comments():
-    """Admin: Get all flagged comments"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -720,7 +719,7 @@ def get_flagged_comments():
         if not current_user or not current_user.is_admin:
             return jsonify({"error": "Admin access required"}), 403
 
-        # Get all flagged comments
+     
         flagged_comments = Comment.query.filter_by(is_flagged=True)\
                                        .order_by(Comment.created_at.desc())\
                                        .all()
@@ -743,7 +742,7 @@ def get_flagged_comments():
 @comment_bp.route("/admin/comments/stats", methods=["GET"])
 @jwt_required()
 def get_comment_stats():
-    """Admin: Get comment statistics"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -751,15 +750,13 @@ def get_comment_stats():
         if not current_user or not current_user.is_admin:
             return jsonify({"error": "Admin access required"}), 403
 
-        # Calculate statistics
+      
         total_comments = Comment.query.count()
         approved_comments = Comment.query.filter_by(is_approved=True).count()
         pending_comments = Comment.query.filter_by(is_approved=False).count()
         flagged_comments = Comment.query.filter_by(is_flagged=True).count()
         
-        # Comments needing re-approval (this would require a more complex query)
-        # For now, we'll just note this feature exists
-        
+       
         return jsonify({
             "total_comments": total_comments,
             "approved_comments": approved_comments,
@@ -770,7 +767,7 @@ def get_comment_stats():
                 "approval_system": True,
                 "change_tracking": True,
                 "flagging_system": True,
-                "voting_system": False  # Disabled for comments
+                "voting_system": False  
             }
         }), 200
 
@@ -778,14 +775,13 @@ def get_comment_stats():
         logger.error(f"Error fetching comment stats: {e}")
         return jsonify({"error": "Failed to fetch comment statistics", "message": str(e)}), 500
 
-# Test endpoint (updated to reflect no voting)
-@comment_bp.route("/comments/test", methods=["GET"])
+
 def test_comments():
     """Test endpoint to verify comments system is working"""
     try:
         comment_count = Comment.query.count()
         
-        # Safe attribute checking
+       
         approved_count = 0
         flagged_count = 0
         pending_count = 0
@@ -807,7 +803,7 @@ def test_comments():
                 "approval_system": hasattr(Comment, 'is_approved'),
                 "change_tracking": hasattr(Comment, 'content_hash'),
                 "flagging_system": hasattr(Comment, 'is_flagged'),
-                "voting_system": False,  # Disabled for comments
+                "voting_system": False, 
                 "like_system": True,
                 "reply_system": True,
                 "admin_controls": True

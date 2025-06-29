@@ -15,7 +15,7 @@ const AddPost = () => {
   const navigate = useNavigate();
   const { user, token } = useAuth();
 
-  // Redirect if not logged in
+
   if (!user) {
     navigate("/login");
     return null;
@@ -81,7 +81,7 @@ const AddPost = () => {
       
       toast.success("Post published successfully!");
       
-      // Navigate to the new post
+     
       if (data.post_id || data.id) {
         navigate(`/posts/${data.post_id || data.id}`);
       } else {
@@ -263,7 +263,7 @@ const AddPost = () => {
             disabled={isSubmitting || (!title.trim() && !content.trim())}
             className="text-indigo-600 px-4 py-2 border border-indigo-300 rounded-md hover:bg-indigo-50 disabled:opacity-50 transition-colors"
             onClick={() => {
-              // Save to localStorage as draft
+             
               localStorage.setItem('post_draft', JSON.stringify({
                 title: title.trim(),
                 content: content.trim(),

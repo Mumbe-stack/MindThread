@@ -4,12 +4,12 @@ from models import db, User, Post, Comment, Vote
 from datetime import datetime
 import logging
 
-# Import utils if available, otherwise define a simple decorator
+
 try:
     from .utils import block_check_required
 except ImportError:
     def block_check_required(f):
-        """Simple decorator if utils not available"""
+    
         def wrapper(*args, **kwargs):
             try:
                 current_user_id = get_jwt_identity()
@@ -31,14 +31,14 @@ vote_bp = Blueprint("votes", __name__)
 @jwt_required()
 @block_check_required 
 def vote_post():
-    """Vote on a post (upvote/downvote) - users can vote on any approved post"""
+    
     try:
         data = request.get_json()
         user_id = get_jwt_identity()
         post_id = data.get("post_id")
         value = data.get("value")
 
-        # Enhanced validation
+       
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
@@ -48,33 +48,33 @@ def vote_post():
         if value not in [-1, 1]:
             return jsonify({"error": "value must be 1 (upvote) or -1 (downvote)"}), 400
 
-        # Validate post exists
+    
         post = Post.query.get(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is approved (unless user is admin or post author)
+    
         current_user = User.query.get(user_id)
         if not post.is_approved and not (current_user and current_user.is_admin) and post.user_id != user_id:
             return jsonify({"error": "Cannot vote on unapproved post"}), 403
 
-        # Check if user already voted on this post
+    
         existing_vote = Vote.query.filter_by(user_id=user_id, post_id=post_id).first()
         
         if existing_vote:
             if existing_vote.value == value:
-                # Same vote - remove it (toggle off)
+              
                 db.session.delete(existing_vote)
                 msg = "Vote removed"
                 user_vote = None
             else:
-                # Different vote - update it
+               
                 existing_vote.value = value 
                 existing_vote.created_at = datetime.utcnow()
                 msg = "Vote updated"
                 user_vote = value
         else:
-            # New vote
+           
             vote = Vote(
                 user_id=user_id, 
                 post_id=post_id, 
@@ -87,7 +87,7 @@ def vote_post():
 
         db.session.commit()
         
-        # Get updated score - more efficient query
+        
         votes = Vote.query.filter_by(post_id=post_id).all()
         score = sum(v.value for v in votes)
         upvotes = len([v for v in votes if v.value == 1])
@@ -115,9 +115,9 @@ def vote_post():
 
 @vote_bp.route("/votes/post/<int:post_id>/score", methods=["GET"])
 def get_post_score(post_id):
-    """Get voting statistics for a post"""
+  
     try:
-        # Check if user is authenticated (optional for viewing scores)
+        
         current_user_id = None
         user_vote = None
         try:
@@ -136,7 +136,7 @@ def get_post_score(post_id):
         downvotes = len([v for v in votes if v.value == -1])
         total_votes = len(votes)
 
-        # Get user's vote if authenticated
+      
         if current_user_id:
             user_vote_obj = Vote.query.filter_by(
                 user_id=current_user_id, 
@@ -162,7 +162,7 @@ def get_post_score(post_id):
 @jwt_required()
 @block_check_required  
 def vote_comment():
-    """Vote on a comment (upvote/downvote) - users can vote on any approved comment"""
+    
     try:
         data = request.get_json()
         user_id = get_jwt_identity()
@@ -182,7 +182,7 @@ def vote_comment():
         if not comment:
             return jsonify({"error": f"Comment with ID {comment_id} does not exist"}), 404
 
-        # Check if comment is approved (unless user is admin or comment author)
+        
         current_user = User.query.get(user_id)
         if not comment.is_approved and not (current_user and current_user.is_admin) and comment.user_id != user_id:
             return jsonify({"error": "Cannot vote on unapproved comment"}), 403
@@ -191,18 +191,18 @@ def vote_comment():
 
         if existing_vote:
             if existing_vote.value == value:
-                # Same vote - remove it (toggle off)
+               
                 db.session.delete(existing_vote)
                 msg = "Vote removed"
                 user_vote = None
             else:
-                # Different vote - update it
+                
                 existing_vote.value = value
                 existing_vote.created_at = datetime.utcnow()
                 msg = "Vote updated"
                 user_vote = value
         else:
-            # New vote
+            
             new_vote = Vote(
                 user_id=user_id, 
                 comment_id=comment_id, 
@@ -215,7 +215,7 @@ def vote_comment():
 
         db.session.commit()
 
-        # Get updated score
+        
         votes = Vote.query.filter_by(comment_id=comment_id).all()
         score = sum(v.value for v in votes)
         upvotes = len([v for v in votes if v.value == 1])
@@ -243,9 +243,9 @@ def vote_comment():
 
 @vote_bp.route("/votes/comment/<int:comment_id>/score", methods=["GET"])
 def get_comment_score(comment_id):
-    """Get voting statistics for a comment"""
+    
     try:
-        # Check if user is authenticated (optional)
+ 
         current_user_id = None
         user_vote = None
         try:
@@ -264,7 +264,7 @@ def get_comment_score(comment_id):
         downvotes = len([v for v in votes if v.value == -1])
         total_votes = len(votes)
 
-        # Get user's vote if authenticated
+       
         if current_user_id:
             user_vote_obj = Vote.query.filter_by(
                 user_id=current_user_id, 
@@ -289,12 +289,12 @@ def get_comment_score(comment_id):
 @vote_bp.route("/votes/user/<int:user_id>/votes", methods=["GET"])
 @jwt_required()
 def get_user_votes(user_id):
-    """Get current user's votes for posts and comments (for showing vote status)"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        # Only allow users to see their own votes, or admins can see any
+       
         if current_user_id != user_id and (not current_user or not current_user.is_admin):
             return jsonify({"error": "Access denied"}), 403
 
@@ -325,7 +325,7 @@ def get_user_votes(user_id):
 @jwt_required()
 @block_check_required  
 def delete_vote_on_post(post_id):
-    """Delete user's own vote on a post"""
+   
     try:
         user_id = get_jwt_identity()
 
@@ -340,7 +340,7 @@ def delete_vote_on_post(post_id):
         db.session.delete(vote)
         db.session.commit()
 
-        # Get updated score
+       
         votes = Vote.query.filter_by(post_id=post_id).all()
         score = sum(v.value for v in votes)
         upvotes = len([v for v in votes if v.value == 1])
@@ -367,7 +367,7 @@ def delete_vote_on_post(post_id):
 @jwt_required()
 @block_check_required 
 def delete_comment_vote(comment_id):
-    """Delete user's own vote on a comment"""
+    
     try:
         user_id = get_jwt_identity()
 
@@ -382,7 +382,7 @@ def delete_comment_vote(comment_id):
         db.session.delete(vote)
         db.session.commit()
 
-        # Get updated score
+      
         votes = Vote.query.filter_by(comment_id=comment_id).all()
         score = sum(v.value for v in votes)
         upvotes = len([v for v in votes if v.value == 1])
@@ -405,11 +405,11 @@ def delete_comment_vote(comment_id):
         return jsonify({"error": "Failed to delete vote"}), 500
 
 
-# ADMIN ROUTES
+
 @vote_bp.route("/votes/admin/post/<int:post_id>/votes", methods=["GET"])
 @jwt_required()
 def admin_get_post_votes(post_id):
-    """Admin: Get all votes on a specific post with user details"""
+   
     try:
         current_user = User.query.get(get_jwt_identity())
         if not current_user or not current_user.is_admin:
@@ -449,7 +449,7 @@ def admin_get_post_votes(post_id):
 @vote_bp.route("/votes/admin/vote/<int:vote_id>", methods=["DELETE"])
 @jwt_required()
 def admin_delete_vote(vote_id):
-    """Admin: Delete any vote"""
+   
     try:
         current_user = User.query.get(get_jwt_identity())
         if not current_user or not current_user.is_admin:
@@ -487,7 +487,7 @@ def admin_delete_vote(vote_id):
 @vote_bp.route("/votes/admin/reset/post/<int:post_id>", methods=["DELETE"])
 @jwt_required()
 def admin_reset_post_votes(post_id):
-    """Admin: Delete all votes on a specific post"""
+    
     try:
         current_user = User.query.get(get_jwt_identity())
         if not current_user or not current_user.is_admin:
@@ -523,7 +523,7 @@ def admin_reset_post_votes(post_id):
 @vote_bp.route("/votes/admin/comment/<int:comment_id>/votes", methods=["GET"])
 @jwt_required()
 def admin_get_comment_votes(comment_id):
-    """Admin: Get all votes on a specific comment with user details"""
+   
     try:
         current_user = User.query.get(get_jwt_identity())
         if not current_user or not current_user.is_admin:
@@ -561,7 +561,7 @@ def admin_get_comment_votes(comment_id):
 
 
 def serialize_vote(vote):
-    """Helper method for Vote model serialization"""
+   
     return {
         "id": vote.id,
         "value": vote.value,

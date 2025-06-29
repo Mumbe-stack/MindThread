@@ -5,20 +5,20 @@ import toast from 'react-hot-toast';
 const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const LikeButton = ({ 
-  type = 'post', // 'post' or 'comment'
+  type = 'post',
   id, 
   initialLikes = 0, 
   initialLiked = false,
   onLikeChange,
-  size = 'normal', // 'small', 'normal', 'large'
-  variant = 'default' // 'default', 'minimal', 'outlined'
+  size = 'normal',
+  variant = 'default' 
 }) => {
   const { user, token } = useAuth();
   const [likes, setLikes] = useState(initialLikes);
   const [isLiked, setIsLiked] = useState(initialLiked);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch current like status when component mounts
+
   useEffect(() => {
     if (user && token && id) {
       fetchLikeStatus();
@@ -47,7 +47,7 @@ const LikeButton = ({
       }
     } catch (error) {
       console.error(`Error fetching ${type} like status:`, error);
-      // Don't show error toast for initial fetch failures
+      
     }
   };
 
@@ -57,11 +57,11 @@ const LikeButton = ({
       return;
     }
 
-    if (isLoading) return; // Prevent double clicks
+    if (isLoading) return; 
 
     setIsLoading(true);
 
-    // Optimistic update
+
     const wasLiked = isLiked;
     const previousLikes = likes;
     setIsLiked(!wasLiked);
@@ -82,7 +82,7 @@ const LikeButton = ({
       });
 
       if (!res.ok) {
-        // Revert optimistic update
+       
         setIsLiked(wasLiked);
         setLikes(previousLikes);
 
@@ -94,7 +94,7 @@ const LikeButton = ({
           errorData = { error: errorText };
         }
         
-        // Handle specific error cases
+       
         if (res.status === 404) {
           toast.error(`${type.charAt(0).toUpperCase() + type.slice(1)} not found`);
         } else if (res.status === 401) {
@@ -109,14 +109,14 @@ const LikeButton = ({
 
       const data = await res.json();
 
-      // Update with server response
+     
       const serverLikes = data.likes_count !== undefined ? data.likes_count : data.likes || 0;
       const serverLiked = data.liked_by_user !== undefined ? data.liked_by_user : !wasLiked;
       
       setLikes(serverLikes);
       setIsLiked(serverLiked);
 
-      // Call parent callback if provided
+      
       if (onLikeChange) {
         onLikeChange({
           id,
@@ -127,18 +127,18 @@ const LikeButton = ({
         });
       }
 
-      // Show success message
+     
       const action = serverLiked ? 'liked' : 'unliked';
       toast.success(data.message || `${type.charAt(0).toUpperCase() + type.slice(1)} ${action}!`);
 
     } catch (error) {
-      // Revert optimistic update
+    
       setIsLiked(wasLiked);
       setLikes(previousLikes);
       
       console.error(`Error toggling ${type} like:`, error);
       
-      // Handle different types of network errors
+     
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         toast.error("Network error - please check your connection");
       } else if (error.message.includes('Failed to fetch')) {
@@ -151,7 +151,7 @@ const LikeButton = ({
     }
   };
 
-  // Size variants
+
   const sizeClasses = {
     small: {
       button: 'px-2 py-1 text-xs',
@@ -170,7 +170,7 @@ const LikeButton = ({
     }
   };
 
-  // Style variants
+
   const getVariantClasses = () => {
     const base = 'inline-flex items-center gap-1 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
     
@@ -186,7 +186,7 @@ const LikeButton = ({
       }`;
     }
     
-    // Default variant
+    
     return `${base} ${
       isLiked 
         ? 'bg-red-100 text-red-600 border border-red-300 hover:bg-red-200' 

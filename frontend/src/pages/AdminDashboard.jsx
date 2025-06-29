@@ -53,7 +53,7 @@ const AdminDashboard = () => {
   const [showUserForm, setShowUserForm] = useState(false);
   const [showPostForm, setShowPostForm] = useState(false);
 
-  // Enhanced error handling with server status awareness
+ 
   const handleApiResponse = async (response, errorMessage = "API request failed") => {
     if (!response.ok) {
       let errorText = errorMessage;

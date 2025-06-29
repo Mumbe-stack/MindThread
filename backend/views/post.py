@@ -33,9 +33,9 @@ def serialize_comment(comment):
     }
 
 def serialize_post(post, current_user_id=None, include_comments=False):
-    """Serialize a post object to dictionary"""
+
     try:
-        # Get vote statistics
+       
         upvotes = Vote.query.filter_by(post_id=post.id, value=1).count()
         downvotes = Vote.query.filter_by(post_id=post.id, value=-1).count()
         vote_score = upvotes - downvotes
@@ -53,7 +53,7 @@ def serialize_post(post, current_user_id=None, include_comments=False):
                 is not None
             )
 
-        # Get approved comments count only
+        
         comments_count = Comment.query.filter_by(post_id=post.id, is_approved=True).count()
         author = User.query.get(post.user_id)
 
@@ -78,13 +78,13 @@ def serialize_post(post, current_user_id=None, include_comments=False):
             'total_votes': upvotes + downvotes,
             'userVote': user_vote,
             'likes': likes_count,
-            'likes_count': likes_count,  # Add both for compatibility
+            'likes_count': likes_count,  
             'liked_by_user': liked_by_user,
             'comments_count': comments_count
         }
 
         if include_comments:
-            # Only include approved comments for regular users
+            
             comments_query = Comment.query.filter_by(post_id=post.id)
             if current_user_id:
                 current_user = User.query.get(current_user_id)
@@ -122,7 +122,7 @@ def serialize_post(post, current_user_id=None, include_comments=False):
 
 @post_bp.route('/posts', methods=['GET'])
 def get_posts():
-    """Get posts (approved only for regular users, all for admins)"""
+   
     try:
         current_user_id = None
         current_user = None
@@ -140,12 +140,12 @@ def get_posts():
         sort_by = request.args.get('sort', 'created_at')
         order = request.args.get('order', 'desc')
 
-        # Base query with joins for author information
+        
         query = Post.query.join(User, Post.user_id == User.id)
 
-        # Filter by approval status based on user role
+     
         if not (current_user and current_user.is_admin):
-            # Regular users only see approved posts
+           
             query = query.filter(Post.is_approved == True)
 
         if search:
@@ -158,7 +158,7 @@ def get_posts():
                 )
             )
 
-        # Sorting
+       
         sort_col = getattr(Post, sort_by, Post.created_at)
         if order.lower() == 'desc':
             query = query.order_by(sort_col.desc())
@@ -176,7 +176,7 @@ def get_posts():
 @post_bp.route('/posts', methods=['POST'])
 @jwt_required()
 def create_post():
-    """Create a new post (requires admin approval)"""
+    
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -194,7 +194,7 @@ def create_post():
         if not content:
             return jsonify({'error':'Content is required'}), 400
 
-        # Posts require approval by default (except for admins)
+     
         is_approved = current_user.is_admin if current_user else False
 
         new_post = Post(
@@ -204,7 +204,7 @@ def create_post():
             user_id=current_user_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            is_approved=is_approved,  # Requires approval unless admin
+            is_approved=is_approved,  
             is_flagged=False
         )
         db.session.add(new_post)
@@ -226,7 +226,7 @@ def create_post():
 
 @post_bp.route('/posts/<int:post_id>', methods=['GET'])
 def get_post(post_id):
-    """Get a specific post (with comments)"""
+   
     try:
         current_user_id = None
         current_user = None
@@ -242,11 +242,11 @@ def get_post(post_id):
         if not post:
             return jsonify({'error':'Post not found'}), 404
 
-        # Check if user can view this post
+        
         can_view = (
-            post.is_approved or  # Post is approved
-            (current_user and current_user.is_admin) or  # User is admin
-            (current_user_id == post.user_id)  # User is the author
+            post.is_approved or  
+            (current_user and current_user.is_admin) or  
+            (current_user_id == post.user_id) 
         )
 
         if not can_view:
@@ -261,7 +261,7 @@ def get_post(post_id):
 @post_bp.route('/posts/<int:post_id>', methods=['PATCH'])
 @jwt_required()
 def update_post(post_id):
-    """Update a specific post — only allowed by the original author"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -270,7 +270,7 @@ def update_post(post_id):
         if not post:
             return jsonify({'error': 'Post not found'}), 404
 
-        # Restrict strictly to post owner
+        
         if post.user_id != current_user_id:
             return jsonify({'error': 'Permission denied'}), 403
 
@@ -299,7 +299,7 @@ def update_post(post_id):
         if 'tags' in data:
             post.tags = data['tags'].strip() if data['tags'] else None
 
-        # Non-admin users (which is now everyone here) require re-approval
+      
         if requires_reapproval and post.is_approved:
             post.is_approved = False
 
@@ -323,7 +323,7 @@ def update_post(post_id):
 @post_bp.route('/posts/<int:post_id>', methods=['DELETE'])
 @jwt_required()
 def delete_post(post_id):
-    """Delete a specific post"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -334,7 +334,7 @@ def delete_post(post_id):
         if post.user_id != current_user_id and not current_user.is_admin:
             return jsonify({'error':'Permission denied'}), 403
 
-        # Delete related data first
+     
         Like.query.filter_by(post_id=post_id).delete()
         Vote.query.filter_by(post_id=post_id).delete()
         Comment.query.filter_by(post_id=post_id).delete()
@@ -351,7 +351,7 @@ def delete_post(post_id):
 @post_bp.route('/posts/<int:post_id>/like', methods=['POST'])
 @jwt_required()
 def toggle_like(post_id):
-    """Toggle like on a post"""
+  
     try:
         current_user_id = get_jwt_identity()
         post = Post.query.get(post_id)
@@ -389,12 +389,12 @@ def toggle_like(post_id):
         logger.error(f"Error toggling like on post {post_id}: {e}")
         return jsonify({'error':'Failed to toggle like','message':str(e)}), 500
 
-# ============== ADMIN ROUTES ==============
+
 
 @post_bp.route('/admin/posts', methods=['GET'])
 @jwt_required()
 def admin_get_all_posts():
-    """Admin: Get all posts (approved and unapproved)"""
+
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -404,11 +404,11 @@ def admin_get_all_posts():
 
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 50, type=int), 100)
-        status = request.args.get('status', 'all')  # 'all', 'approved', 'unapproved', 'flagged'
+        status = request.args.get('status', 'all')  
 
         query = Post.query.join(User, Post.user_id == User.id)
 
-        # Filter by status
+     
         if status == 'approved':
             query = query.filter(Post.is_approved == True)
         elif status == 'unapproved':
@@ -429,7 +429,7 @@ def admin_get_all_posts():
 @post_bp.route('/admin/posts/<int:post_id>/approve', methods=['PATCH'])
 @jwt_required()
 def approve_post(post_id):
-    """Admin: Approve or reject a post"""
+  
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -449,9 +449,9 @@ def approve_post(post_id):
         post.is_approved = is_approved
         post.updated_at = datetime.utcnow()
         
-        # If rejecting, optionally add a reason
+       
         if not is_approved and 'reason' in data:
-            # Could store rejection reason in a separate table if needed
+          
             pass
 
         db.session.commit()
@@ -470,7 +470,7 @@ def approve_post(post_id):
 @post_bp.route('/admin/posts/<int:post_id>/flag', methods=['PATCH'])
 @jwt_required()
 def admin_flag_post(post_id):
-    """Admin: Flag or unflag a post"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -503,7 +503,7 @@ def admin_flag_post(post_id):
 @post_bp.route('/admin/posts/unapproved', methods=['GET'])
 @jwt_required()
 def get_unapproved_posts():
-    """Admin: Get all unapproved posts"""
+   
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)

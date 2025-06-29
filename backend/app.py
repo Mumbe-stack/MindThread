@@ -11,13 +11,13 @@ from models import db, TokenBlocklist
 from views import post_bp, comment_bp, user_bp, vote_bp, home_bp, auth_bp
 from views.admin import admin_bp
 
-# Configure logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Enhanced CORS Configuration - SIMPLIFIED
+
 CORS(
     app,
     origins=[
@@ -34,10 +34,10 @@ CORS(
         "Access-Control-Allow-Credentials"
     ],
     supports_credentials=True,
-    max_age=3600  # Cache preflight for 1 hour
+    max_age=3600  
 )
 
-# Database Configuration
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://mindthread_db_56lm_user:Kdjo6KFm6y4jsU3TFEZJ5hcgBF7g8fAC@dpg-d1evccfgi27c7384mvc0-a.oregon-postgres.render.com/mindthread_db_56lm"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -48,12 +48,12 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'max_overflow': 10
 }
 
-# Enhanced JWT Configuration
+
 app.config["JWT_SECRET_KEY"] = os.environ.get(
     "JWT_SECRET_KEY", 
     "jwt_secre542cc4f32fc0a619979df2b56083fb21c97ea4c9e0e2b7d25779734357a1810486ef0c480c8fb9da1990c602dbf1438b9b6f3fa72716b13baf28612496d8fcd8t_key"
 )
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)  # Reduced for better security
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)  
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 app.config["JWT_BLACKLIST_ENABLED"] = True
@@ -61,10 +61,10 @@ app.config["JWT_BLACKLIST_TOKEN_CHECKS"] = ["access", "refresh"]
 app.config["JWT_VERIFY_SUB"] = False
 app.config["JWT_ALGORITHM"] = "HS256"
 
-# Enable exception propagation for proper error handling
+
 app.config['PROPAGATE_EXCEPTIONS'] = True
 
-# Mail Configuration
+
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -73,15 +73,15 @@ app.config['MAIL_USERNAME'] = os.environ.get("MAIL_USERNAME", "projectappmail199
 app.config['MAIL_PASSWORD'] = os.environ.get("MAIL_PASSWORD", "hirm xovn cikd jskq")
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get("MAIL_DEFAULT_SENDER", "projectappmail1998@gmail.com")
 
-# File Upload Configuration
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
-# Security Configuration
-app.config['WTF_CSRF_ENABLED'] = False  # Disabled for API
+
+app.config['WTF_CSRF_ENABLED'] = False 
 app.config['JSON_SORT_KEYS'] = False
 
-# Initialize extensions
+
 db.init_app(app)
 migrate = Migrate(app, db)
 mail = Mail(app)
@@ -94,10 +94,10 @@ def uploaded_file(filename):
     return send_from_directory(upload_folder, filename)
 
 
-# Enhanced JWT Error Handlers
+
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
-    """Check if a JWT exists in the blocklist"""
+   
     try:
         jti = jwt_payload["jti"]
         return db.session.query(TokenBlocklist.id).filter_by(jti=jti).scalar() is not None
@@ -107,7 +107,7 @@ def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
 
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
-    """Handle expired token"""
+    
     logger.warning(f"Expired token accessed by user: {jwt_payload.get('sub', 'unknown')}")
     return jsonify({
         "error": "Token has expired",
@@ -117,7 +117,7 @@ def expired_token_callback(jwt_header, jwt_payload):
 
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
-    """Handle invalid token"""
+    
     logger.warning(f"Invalid token error: {error}")
     return jsonify({
         "error": "Invalid token",
@@ -127,7 +127,7 @@ def invalid_token_callback(error):
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):
-    """Handle missing token"""
+   
     return jsonify({
         "error": "Authorization token required",
         "message": "Please log in to access this resource",
@@ -136,7 +136,7 @@ def missing_token_callback(error):
 
 @jwt.revoked_token_loader
 def revoked_token_callback(jwt_header, jwt_payload):
-    """Handle revoked token"""
+  
     logger.warning(f"Revoked token accessed by user: {jwt_payload.get('sub', 'unknown')}")
     return jsonify({
         "error": "Token has been revoked",
@@ -146,17 +146,17 @@ def revoked_token_callback(jwt_header, jwt_payload):
 
 @jwt.needs_fresh_token_loader
 def token_not_fresh_callback(jwt_header, jwt_payload):
-    """Handle non-fresh token"""
+  
     return jsonify({
         "error": "Fresh token required",
         "message": "Please log in again to access this resource",
         "code": "TOKEN_NOT_FRESH"
     }), 401
 
-# Enhanced Error Handlers
+
 @app.errorhandler(400)
 def bad_request(error):
-    """Handle bad request errors"""
+   
     logger.warning(f"Bad request: {error}")
     return jsonify({
         "error": "Bad Request",
@@ -166,7 +166,7 @@ def bad_request(error):
 
 @app.errorhandler(401)
 def unauthorized(error):
-    """Handle unauthorized errors"""
+   
     return jsonify({
         "error": "Unauthorized",
         "message": "Authentication required",
@@ -175,7 +175,7 @@ def unauthorized(error):
 
 @app.errorhandler(403)
 def forbidden(error):
-    """Handle forbidden errors"""
+   
     return jsonify({
         "error": "Forbidden",
         "message": "You don't have permission to access this resource",
@@ -184,7 +184,7 @@ def forbidden(error):
 
 @app.errorhandler(404)
 def not_found(error):
-    """Handle not found errors"""
+   
     return jsonify({
         "error": "Resource not found",
         "message": "The requested resource was not found",
@@ -193,7 +193,7 @@ def not_found(error):
 
 @app.errorhandler(409)
 def conflict(error):
-    """Handle conflict errors"""
+  
     return jsonify({
         "error": "Conflict",
         "message": "The request conflicts with the current state of the resource",
@@ -202,7 +202,7 @@ def conflict(error):
 
 @app.errorhandler(413)
 def too_large(error):
-    """Handle file too large errors"""
+ 
     return jsonify({
         "error": "File too large",
         "message": "The uploaded file exceeds the maximum allowed size",
@@ -211,7 +211,7 @@ def too_large(error):
 
 @app.errorhandler(422)
 def unprocessable_entity(error):
-    """Handle unprocessable entity errors"""
+   
     return jsonify({
         "error": "Unprocessable Entity",
         "message": "The request was well-formed but contains semantic errors",
@@ -220,7 +220,7 @@ def unprocessable_entity(error):
 
 @app.errorhandler(429)
 def too_many_requests(error):
-    """Handle rate limiting errors"""
+  
     return jsonify({
         "error": "Too Many Requests",
         "message": "Rate limit exceeded. Please try again later.",
@@ -229,7 +229,7 @@ def too_many_requests(error):
 
 @app.errorhandler(500)
 def internal_error(error):
-    """Handle internal server errors"""
+  
     try:
         db.session.rollback()
     except Exception:
@@ -244,7 +244,7 @@ def internal_error(error):
 
 @app.errorhandler(502)
 def bad_gateway(error):
-    """Handle bad gateway errors"""
+   
     return jsonify({
         "error": "Bad Gateway",
         "message": "The server received an invalid response from an upstream server",
@@ -253,36 +253,33 @@ def bad_gateway(error):
 
 @app.errorhandler(503)
 def service_unavailable(error):
-    """Handle service unavailable errors"""
+  
     return jsonify({
         "error": "Service Unavailable",
         "message": "The server is temporarily unavailable",
         "code": "SERVICE_UNAVAILABLE"
     }), 503
 
-# REMOVED the conflicting handle_preflight function that was causing CORS issues
 
-# Register Blueprints with proper URL prefixes to match frontend expectations
 try:
-    # Frontend expects: /api/posts, /api/comments, etc.
-    # So we register blueprints with /api prefix and let each blueprint define its routes
-    app.register_blueprint(post_bp, url_prefix="/api")      # post_bp should define routes like @bp.route('/posts')
-    app.register_blueprint(comment_bp, url_prefix="/api")   # comment_bp should define routes like @bp.route('/comments')
-    app.register_blueprint(user_bp, url_prefix="/api")      # user_bp should define routes like @bp.route('/users')
-    app.register_blueprint(vote_bp, url_prefix="/api")      # vote_bp should define routes like @bp.route('/votes')
-    app.register_blueprint(auth_bp, url_prefix="/api")      # auth_bp should define routes like @bp.route('/auth')
-    app.register_blueprint(admin_bp, url_prefix="/api")     # admin_bp already has "/admin" prefix in routes
-    app.register_blueprint(home_bp)                         # home_bp for root routes
+
+    app.register_blueprint(post_bp, url_prefix="/api")      
+    app.register_blueprint(comment_bp, url_prefix="/api")   
+    app.register_blueprint(user_bp, url_prefix="/api")     
+    app.register_blueprint(vote_bp, url_prefix="/api")    
+    app.register_blueprint(auth_bp, url_prefix="/api")     
+    app.register_blueprint(admin_bp, url_prefix="/api")     
+    app.register_blueprint(home_bp)                        
     logger.info("✅ All blueprints registered successfully")
 except Exception as e:
     logger.error(f"❌ Error registering blueprints: {e}")
 
-# Health Check Endpoint
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+   
     try:
-        # Test database connection
+      
         db.session.execute('SELECT 1')
         db_status = "healthy"
     except Exception as e:
@@ -306,10 +303,10 @@ def health_check():
         "timestamp": str(os.times().elapsed) if hasattr(os, 'times') else "unavailable"
     }), 200 if db_status == "healthy" else 503
 
-# API Info Endpoint
+
 @app.route('/api/info', methods=['GET'])
 def api_info():
-    """API information endpoint"""
+  
     return jsonify({
         "name": "MindThread API",
         "version": "2.0.0",
@@ -337,19 +334,19 @@ def api_info():
         "documentation": "https://mindthread-1.onrender.com/api/docs"
     }), 200
 
-# API Status Endpoint (for monitoring)
+
 @app.route('/api/status', methods=['GET'])
 def api_status():
-    """API status endpoint for monitoring"""
+   
     try:
         from models import User, Post, Comment, Vote, Like
         
-        # Test database and get basic stats
+     
         total_users = User.query.count()
         total_posts = Post.query.count()
         total_comments = Comment.query.count()
         
-        # Test approval system
+       
         approval_system_active = hasattr(Post, 'is_approved') and hasattr(Comment, 'is_approved')
         flagging_system_active = hasattr(Post, 'is_flagged') and hasattr(Comment, 'is_flagged')
         
@@ -375,7 +372,7 @@ def api_status():
         }), 503
 
 def create_upload_dirs():
-    """Create necessary upload directories"""
+   
     upload_dirs = [
         'uploads', 
         'uploads/avatars', 
@@ -391,11 +388,11 @@ def create_upload_dirs():
             logger.error(f"❌ Failed to create directory {directory}: {e}")
 
 def validate_environment():
-    """Validate required environment variables"""
+  
     required_vars = []
     warnings = []
     
-    # Check for production environment variables
+  
     if not os.environ.get("JWT_SECRET_KEY"):
         warnings.append("JWT_SECRET_KEY not set - using default (not recommended for production)")
     
@@ -408,15 +405,15 @@ def validate_environment():
     return len(required_vars) == 0
 
 def check_model_compatibility():
-    """Check if models have required approval system fields"""
+
     try:
         from models import Post, Comment
         
-        # Check Post model
+     
         post_has_approval = hasattr(Post, 'is_approved')
         post_has_flagging = hasattr(Post, 'is_flagged')
         
-        # Check Comment model  
+        
         comment_has_approval = hasattr(Comment, 'is_approved')
         comment_has_flagging = hasattr(Comment, 'is_flagged')
         
@@ -439,24 +436,24 @@ def check_model_compatibility():
         logger.error(f"❌ Model compatibility check failed: {e}")
         return {"approval_system": False, "flagging_system": False}
 
-# Application Context Setup
+
 with app.app_context():
     try:
-        # Validate environment
+       
         validate_environment()
         
-        # Create database tables
+      
         db.create_all()
         logger.info("✅ Database tables created successfully")
         
-        # Check model compatibility
+        
         model_status = check_model_compatibility()
         
-        # Create upload directories
+        
         create_upload_dirs()
         logger.info("✅ Upload directories created successfully")
         
-        # Log registered routes for debugging
+       
         logger.info("✅ API Routes Registration:")
         relevant_routes = []
         for rule in app.url_map.iter_rules():
@@ -467,18 +464,18 @@ with app.app_context():
         for route in sorted(relevant_routes):
             logger.info(route)
         
-        # Check critical routes that frontend expects
+    
         logger.info("🔍 Critical Routes Check:")
         critical_routes = [
-            '/api/login',           # Auth routes
-            '/api/register',        # Auth routes
-            '/api/posts',           # Post routes
-            '/api/posts/<',         # Dynamic post routes
-            '/api/comments',        # Comment routes
-            '/api/users',           # User routes
-            '/api/votes/post',      # Vote routes
-            '/api/admin/stats',     # Admin routes
-            '/api/health'           # Health check
+            '/api/login',          
+            '/api/register',        
+            '/api/posts',         
+            '/api/posts/<',        
+            '/api/comments',       
+            '/api/users',           
+            '/api/votes/post',     
+            '/api/admin/stats',     
+            '/api/health'           
         ]
         
         all_routes = [rule.rule for rule in app.url_map.iter_rules()]
@@ -488,7 +485,7 @@ with app.app_context():
             status = '✅ Found' if found else '❌ Missing'
             logger.info(f"   {status}: {route}")
         
-        # Log system status
+    
         logger.info("🎯 System Status:")
         logger.info(f"   ✅ Database: Connected")
         logger.info(f"   {'✅' if model_status['approval_system'] else '⚠️ '} Approval System: {'Active' if model_status['approval_system'] else 'Inactive'}")
@@ -498,20 +495,20 @@ with app.app_context():
         
     except Exception as e:
         logger.error(f"❌ Application initialization error: {e}")
-        # Don't exit in production, log error and continue
+   
         if os.environ.get("FLASK_ENV") == "development":
             raise
 
-# Add request logging for debugging
+
 @app.before_request
 def log_request_info():
-    """Log request information for debugging"""
+   
     if app.debug or os.environ.get("FLASK_ENV") == "development":
         logger.debug(f"Request: {request.method} {request.url}")
         if request.is_json and request.method != 'GET':
             try:
                 data = request.get_json()
-                # Don't log sensitive data
+             
                 if data and not any(field in str(data) for field in ['password', 'token', 'secret']):
                     logger.debug(f"JSON Data: {data}")
             except:
@@ -519,13 +516,12 @@ def log_request_info():
 
 @app.after_request
 def after_request(response):
-    """Add security headers and log response"""
-    # Security headers
+ 
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     
-    # Log response for debugging
+
     if app.debug or os.environ.get("FLASK_ENV") == "development":
         logger.debug(f"Response: {response.status_code}")
     

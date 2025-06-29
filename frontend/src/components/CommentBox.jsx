@@ -38,7 +38,7 @@ const CommentBox = ({ postId, onCommentSubmit, comments = [] }) => {
       if (res.ok) {
         const data = await res.json();
         
-        // Show appropriate success message
+     
         if (data.is_approved) {
           toast.success("Comment posted and approved");
         } else {
@@ -47,7 +47,7 @@ const CommentBox = ({ postId, onCommentSubmit, comments = [] }) => {
         
         setContent("");
         
-        // Call parent callback to refresh comments
+ 
         if (onCommentSubmit) {
           onCommentSubmit(data);
         }
@@ -83,7 +83,7 @@ const CommentBox = ({ postId, onCommentSubmit, comments = [] }) => {
       return;
     }
 
-    // Prevent multiple simultaneous operations on the same comment
+  
     if (processingComments.has(commentId)) {
       return;
     }
@@ -105,7 +105,7 @@ const CommentBox = ({ postId, onCommentSubmit, comments = [] }) => {
 
       if (res.ok) {
         toast.success(data.message || (isApproved ? "Comment approved" : "Comment disapproved"));
-        // Refresh comments to show updated status
+      
         if (onCommentSubmit) {
           onCommentSubmit();
         }
@@ -155,7 +155,7 @@ const CommentBox = ({ postId, onCommentSubmit, comments = [] }) => {
 
       if (res.ok) {
         toast.success(data.message || (isFlagged ? "Comment flagged" : "Comment unflagged"));
-        // Refresh comments to show updated status
+        
         if (onCommentSubmit) {
           onCommentSubmit();
         }
@@ -189,7 +189,7 @@ const CommentBox = ({ postId, onCommentSubmit, comments = [] }) => {
   };
 
   const getApprovalStatusBadge = (comment) => {
-    // Priority order: Flagged > Pending > Needs Re-approval > Approved
+    
     if (comment.is_flagged) {
       return (
         <span className="inline-flex items-center text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full border border-red-200 font-medium">

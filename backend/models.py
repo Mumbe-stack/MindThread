@@ -17,7 +17,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relationships
+   
     posts = db.relationship("Post", backref="user", lazy=True, cascade="all, delete-orphan")
     comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan")
     votes = db.relationship('Vote', backref='user', lazy='dynamic', cascade='all, delete-orphan')
@@ -49,51 +49,51 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    # Approval and flagging fields
+  
     is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
     is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Changed default to False
 
-    # Foreign key
+
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
-    # Relationships
+   
     comments = db.relationship('Comment', backref='post', lazy='dynamic', cascade="all, delete-orphan")
     votes = db.relationship('Vote', backref='post', lazy='dynamic', cascade="all, delete-orphan")
     likes = db.relationship('Like', backref='post', lazy='dynamic', cascade="all, delete-orphan")
 
-    # Computed properties for likes and votes
+
     @property
     def likes_count(self):
-        """Get the number of users who liked this post"""
+     
         return self.likes.count()
 
     @property
     def vote_score(self):
-        """Get the total vote score (upvotes - downvotes)"""
+    
         return sum(vote.value for vote in self.votes)
 
     @property
     def upvotes_count(self):
-        """Get the number of upvotes"""
+   
         return self.votes.filter_by(value=1).count()
 
     @property
     def downvotes_count(self):
-        """Get the number of downvotes"""
+        
         return self.votes.filter_by(value=-1).count()
 
     @property
     def total_votes(self):
-        """Get the total number of votes"""
+        
         return self.votes.count()
 
     @property
     def comments_count(self):
-        """Get the number of approved comments"""
+       
         return self.comments.filter_by(is_approved=True).count()
 
     def to_dict(self, include_author=True, current_user=None):
-        """Convert post to dictionary"""
+       
         data = {
             'id': self.id,
             'title': self.title,
@@ -120,15 +120,15 @@ class Post(db.Model):
                 'avatar_url': self.user.avatar_url
             }
 
-        # Add user's vote and like status if current_user is provided
+       
         if current_user:
             user_vote = self.votes.filter_by(user_id=current_user.id).first()
             data['user_vote'] = user_vote.value if user_vote else None
-            data['userVote'] = user_vote.value if user_vote else None  # For compatibility
+            data['userVote'] = user_vote.value if user_vote else None  
             
             user_like = self.likes.filter_by(user_id=current_user.id).first()
             data['user_liked'] = user_like is not None
-            data['liked_by_user'] = user_like is not None  # For compatibility
+            data['liked_by_user'] = user_like is not None 
         
         return data
 
@@ -143,55 +143,55 @@ class Comment(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-    # Foreign keys
+ 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=False, index=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
 
-    # Approval and flagging fields
+  
     is_flagged = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Changed default to False
+    is_approved = db.Column(db.Boolean, default=False, nullable=False, index=True) 
 
-    # Relationships
+  
     votes = db.relationship('Vote', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
     likes = db.relationship('Like', backref='comment', lazy='dynamic', cascade='all, delete-orphan')
     
-    # Self-referential relationship for replies
+
     replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), lazy='dynamic')
 
-    # Computed properties for likes and votes
+ 
     @property
     def likes_count(self):
-        """Get the number of users who liked this comment"""
+        
         return self.likes.count()
 
     @property
     def vote_score(self):
-        """Get the total vote score (upvotes - downvotes)"""
+       
         return sum(vote.value for vote in self.votes)
 
     @property
     def upvotes_count(self):
-        """Get the number of upvotes"""
+      
         return self.votes.filter_by(value=1).count()
 
     @property
     def downvotes_count(self):
-        """Get the number of downvotes"""
+
         return self.votes.filter_by(value=-1).count()
 
     @property
     def total_votes(self):
-        """Get the total number of votes"""
+       
         return self.votes.count()
 
     @property
     def replies_count(self):
-        """Get the number of approved replies"""
+        
         return self.replies.filter_by(is_approved=True).count()
 
     def to_dict(self, include_author=True, current_user=None):
-        """Convert comment to dictionary"""
+       
         data = {
             'id': self.id,
             'content': self.content,
@@ -218,15 +218,15 @@ class Comment(db.Model):
                 'avatar_url': self.user.avatar_url
             }
 
-        # Add user's vote and like status if current_user is provided
+    
         if current_user:
             user_vote = self.votes.filter_by(user_id=current_user.id).first()
             data['user_vote'] = user_vote.value if user_vote else None
-            data['userVote'] = user_vote.value if user_vote else None  # For compatibility
+            data['userVote'] = user_vote.value if user_vote else None 
             
             user_like = self.likes.filter_by(user_id=current_user.id).first()
             data['user_liked'] = user_like is not None
-            data['liked_by_user'] = user_like is not None  # For compatibility
+            data['liked_by_user'] = user_like is not None
         
         return data
 
@@ -237,22 +237,22 @@ class Vote(db.Model):
     __tablename__ = 'votes'
 
     id = db.Column(db.Integer, primary_key=True)
-    value = db.Column(db.Integer, nullable=False)  # 1 for upvote, -1 for downvote
+    value = db.Column(db.Integer, nullable=False) 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    # Foreign keys
+ 
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True, index=True)
     comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
 
-    # Constraints to ensure data integrity
+
     __table_args__ = (
-        # Ensure one vote per user per post/comment
+      
         db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_vote'),
         db.UniqueConstraint('user_id', 'comment_id', name='unique_user_comment_vote'),
-        # Ensure valid vote values
+       
         db.CheckConstraint('value IN (1, -1)', name='valid_vote_value'),
-        # Ensure vote targets either post OR comment, not both
+       
         db.CheckConstraint(
             '(post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)', 
             name='vote_target_constraint'
@@ -280,17 +280,17 @@ class Like(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    # Foreign keys
+  
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'), nullable=True, index=True)
     comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True, index=True)
 
-    # Constraints to ensure data integrity
+ 
     __table_args__ = (
-        # Ensure one like per user per post/comment
+    
         db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_like'),
         db.UniqueConstraint('user_id', 'comment_id', name='unique_user_comment_like'),
-        # Ensure like targets either post OR comment, not both
+     
         db.CheckConstraint(
             '(post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)', 
             name='like_target_constraint'
@@ -298,7 +298,7 @@ class Like(db.Model):
     )
 
     def to_dict(self):
-        """Convert like to dictionary"""
+     
         return {
             'id': self.id,
             'user_id': self.user_id,

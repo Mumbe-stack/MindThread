@@ -14,7 +14,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const calledRef = useRef(false);
 
-  // Redirect if already authenticated
+
   useEffect(() => {
     if (!loading && isAuthenticated) {
       navigate(from, { replace: true });
@@ -48,7 +48,7 @@ const Login = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Clear specific field error when user starts typing
+
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -63,18 +63,17 @@ const Login = () => {
     calledRef.current = true;
 
     try {
-      // Call login with credentials object as expected by AuthContext
+      
       const result = await login({
         email: formData.email.trim().toLowerCase(),
         password: formData.password
       });
 
       if (result.success) {
-        // AuthContext already handles success toast and navigation
-        // Just ensure we don't call this multiple times
+        
         return;
       } else {
-        // Handle login failure
+       
         setErrors({ 
           general: result.error || "Login failed. Please check your credentials." 
         });
@@ -91,7 +90,7 @@ const Login = () => {
     }
   };
 
-  // Show loading while checking authentication status
+
   if (loading) {
     return (
       <div className="max-w-md mx-auto p-6 mt-20 bg-white shadow rounded">
@@ -205,7 +204,7 @@ const Login = () => {
         </p>
       </div>
 
-      {/* Optional: Add forgot password link */}
+      {/* forgot password link */}
       <div className="mt-4 text-center">
         <Link 
           to="/forgot-password" 

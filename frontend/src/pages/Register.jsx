@@ -10,7 +10,6 @@ const Register = () => {
   const { register, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (!loading && isAuthenticated) {
       navigate("/", { replace: true });
@@ -46,7 +45,7 @@ const Register = () => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
 
-    // Clear error when user starts typing
+  
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
@@ -77,7 +76,7 @@ const Register = () => {
     }
   };
 
-  // Show loading while checking authentication status
+  
   if (loading) {
     return (
       <div className="max-w-md mx-auto p-6 mt-20 bg-white shadow rounded">

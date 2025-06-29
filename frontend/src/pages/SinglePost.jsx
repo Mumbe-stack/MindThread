@@ -45,7 +45,7 @@ const SinglePost = () => {
       const data = await res.json();
       setPost(data);
       
-      // Comments are included in the post response, or fetch separately
+     
       if (data.comments && Array.isArray(data.comments)) {
         setComments(data.comments);
       } else {
@@ -69,7 +69,7 @@ const SinglePost = () => {
         headers.Authorization = `Bearer ${token}`;
       }
       
-      // Use the correct endpoint for fetching post comments
+     
       const res = await fetch(`${VITE_API_URL}/api/posts/${id}/comments`, {
         headers,
         credentials: "include",
@@ -91,12 +91,12 @@ const SinglePost = () => {
 
   const refreshComments = async (newComment) => {
     if (newComment) {
-      // Add the new comment to the list if it's approved or user is admin
+      
       if (newComment.is_approved || (user && user.is_admin)) {
         setComments(prev => [...prev, newComment]);
       }
     } else {
-      // Refresh all comments
+     
       await fetchComments();
     }
   };
@@ -107,7 +107,7 @@ const SinglePost = () => {
     }
   }, [id, token]); 
 
-  // Vote on post only (removed comment voting)
+ 
   const handlePostVote = async (value) => {
     if (!user || !token) {
       toast.error("Please login to vote");
@@ -158,7 +158,7 @@ const SinglePost = () => {
     }
   };
 
-  // Admin functions
+ 
   const handleApprovePost = async (isApproved) => {
     if (!user?.is_admin || !token) {
       toast.error("Admin access required");
@@ -228,7 +228,7 @@ const SinglePost = () => {
       if (res.ok) {
         toast.success("Vote deleted");
         fetchAdminVotes();
-        // Refresh post to update vote counts
+      
         fetchPost();
       } else {
         toast.error("Failed to delete vote");
@@ -257,7 +257,7 @@ const SinglePost = () => {
         toast.success(`${data.votes_deleted} votes deleted`);
         setAdminVotes([]);
         setAdminVotesVisible(false);
-        // Refresh post to update vote counts
+       
         fetchPost();
       } else {
         toast.error("Failed to reset votes");
@@ -306,7 +306,7 @@ const SinglePost = () => {
     }
   };
 
-  // Vote buttons component (only for posts now)
+  
   const VoteButtons = ({ score = 0, upvotes = 0, downvotes = 0, userVote = null, onVote }) => (
     <div className="flex items-center bg-gray-50 rounded-xl p-2 space-x-1">
       {/* Upvote */}

@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
-// Avatar Uploader Component (for Quick Actions section)
+
 const AvatarUploader = ({ onUploadSuccess }) => {
   const [isUploading, setIsUploading] = useState(false);
   const { token } = useAuth();
@@ -48,7 +48,7 @@ const AvatarUploader = ({ onUploadSuccess }) => {
         const result = await response.json();
         console.log("Avatar upload success:", result);
         
-        // Don't trigger refresh - just let user refresh manually if needed
+      
         
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -90,19 +90,19 @@ const Profile = () => {
   const [fullUserData, setFullUserData] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Redirect if not authenticated
+ 
   useEffect(() => {
     if (!loading && !token && !user) {
       navigate("/login");
     }
   }, [token, loading, user, navigate]);
 
-  // Fetch profile data when component mounts (only once)
+
   useEffect(() => {
     if (user && token && !fullUserData) {
       fetchFullUserProfile();
     }
-  }, [user?.id, token]); // Only depend on user.id and token to prevent loops
+  }, [user?.id, token]); 
 
   const makeAuthenticatedRequest = async (url, options = {}) => {
     try {
@@ -141,10 +141,10 @@ const Profile = () => {
       
       setFullUserData(userData);
       
-      // Enhanced stats extraction with multiple fallback methods
+    
       let posts = 0, comments = 0, votes = 0;
       
-      // Method 1: Check nested stats object (preferred format)
+     
       if (userData.stats) {
         posts = userData.stats.posts_count || userData.stats.post_count || 0;
         comments = userData.stats.comments_count || userData.stats.comment_count || 0;
@@ -152,7 +152,7 @@ const Profile = () => {
         console.log("Stats from nested object:", { posts, comments, votes });
       }
       
-      // Method 2: Fallback to direct properties
+      
       if (posts === 0 && comments === 0 && votes === 0) {
         posts = userData.post_count || userData.posts_count || 0;
         comments = userData.comment_count || userData.comments_count || 0;
@@ -268,7 +268,7 @@ This will permanently delete:
     );
   }
 
-  // Get the avatar URL from either fullUserData or user
+
   const avatarUrl = fullUserData?.avatar_url || user?.avatar_url;
 
   return (
@@ -526,7 +526,7 @@ This will permanently delete:
           </button>
         </div>
 
-        {/* Recent Activity Preview - MOVED AFTER DELETE BUTTON AS REQUESTED */}
+        {/* Recent Activity Preview  */}
         {fullUserData && (fullUserData.recent_posts || fullUserData.recent_comments) && (
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
             <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h3>
