@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext"; // Add this import
+import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
 const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
@@ -8,7 +8,7 @@ const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onren
 const EditPost = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token, authenticatedRequest, isAdmin } = useAuth(); // Use AuthContext instead of localStorage
+  const { user, token, authenticatedRequest, isAdmin } = useAuth();
   const [post, setPost] = useState({ title: "", content: "", tags: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,7 +23,6 @@ const EditPost = () => {
 
       try {
         setLoading(true);
-        // Use the authenticatedRequest helper from AuthContext
         const res = await authenticatedRequest(`${VITE_API_URL}/api/posts/${id}`);
 
         if (!res.ok) {
@@ -47,7 +46,6 @@ const EditPost = () => {
 
         const data = await res.json();
         
-        // Check if user owns the post or is admin
         if (data.user_id !== user.id && !isAdmin()) {
           toast.error("You can only edit your own posts.");
           navigate("/posts");
@@ -90,7 +88,6 @@ const EditPost = () => {
     setSaving(true);
 
     try {
-      // Use the authenticatedRequest helper from AuthContext
       const res = await authenticatedRequest(`${VITE_API_URL}/api/posts/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -118,11 +115,21 @@ const EditPost = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="text-center py-16">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-6"></div>
-            <p className="text-gray-600 text-lg font-medium">Loading post...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center space-y-6">
+              <div className="relative">
+                <div className="w-16 h-16 mx-auto">
+                  <div className="absolute inset-0 rounded-full border-4 border-blue-200 animate-pulse"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold text-gray-800">Loading Post</h3>
+                <p className="text-gray-600">Please wait while we fetch your content...</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -130,119 +137,177 @@ const EditPost = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
         {/* Navigation */}
-        <div className="mb-8">
+        <div className="mb-6 lg:mb-10">
           <button 
             onClick={() => navigate(`/posts/${id}`)}
-            className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 group"
+            className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors duration-200 rounded-lg hover:bg-white/60 backdrop-blur-sm"
           >
-            <svg className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Post
           </button>
         </div>
 
-        {/* Edit Form */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200 p-6 sm:p-8 lg:p-10">
-          <h2 className="text-3xl font-bold mb-8 text-gray-900 flex items-center">
-            <svg className="w-8 h-8 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Edit Post
-          </h2>
-
-          <form onSubmit={handleUpdate} className="space-y-6">
-            {/* Title Input */}
-            <div>
-              <label htmlFor="title" className="block text-sm font-semibold text-gray-700 mb-2">
-                Post Title
-              </label>
-              <input
-                id="title"
-                type="text"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="Enter your post title..."
-                value={post.title}
-                onChange={(e) => setPost({ ...post, title: e.target.value })}
-                required
-                disabled={saving}
-              />
+        {/* Main Content */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl lg:rounded-3xl shadow-xl border border-white/20 overflow-hidden">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 sm:px-8 lg:px-10 py-6 lg:py-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 lg:w-12 lg:h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5 lg:w-6 lg:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-2xl lg:text-3xl font-bold text-white">Edit Post</h1>
+                  <p className="text-blue-100 text-sm lg:text-base">Update your content and share your thoughts</p>
+                </div>
+              </div>
             </div>
 
-            {/* Content Textarea */}
-            <div>
-              <label htmlFor="content" className="block text-sm font-semibold text-gray-700 mb-2">
-                Post Content
-              </label>
-              <textarea
-                id="content"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-vertical"
-                placeholder="Write your post content..."
-                value={post.content}
-                onChange={(e) => setPost({ ...post, content: e.target.value })}
-                required
-                disabled={saving}
-                rows={12}
-              />
-            </div>
-
-            {/* Tags Input */}
-            <div>
-              <label htmlFor="tags" className="block text-sm font-semibold text-gray-700 mb-2">
-                Tags (optional)
-              </label>
-              <input
-                id="tags"
-                type="text"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="Enter tags separated by commas..."
-                value={post.tags}
-                onChange={(e) => setPost({ ...post, tags: e.target.value })}
-                disabled={saving}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Example: technology, programming, web development
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={() => navigate(`/posts/${id}`)}
-                className="inline-flex items-center justify-center px-6 py-3 bg-gray-500 text-white font-medium rounded-xl hover:bg-gray-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
-                disabled={saving}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Cancel
-              </button>
+            {/* Form */}
+            <form onSubmit={handleUpdate} className="p-6 sm:p-8 lg:p-10 space-y-8">
               
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                disabled={saving || !post.title.trim() || !post.content.trim()}
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              {/* Title Input */}
+              <div className="space-y-3">
+                <label htmlFor="title" className="flex items-center gap-2 text-sm lg:text-base font-semibold text-gray-800">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  Post Title *
+                </label>
+                <div className="relative">
+                  <input
+                    id="title"
+                    type="text"
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 lg:py-4 text-base lg:text-lg bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Enter an engaging title for your post..."
+                    value={post.title}
+                    onChange={(e) => setPost({ ...post, title: e.target.value })}
+                    required
+                    disabled={saving}
+                    maxLength="200"
+                  />
+                  <div className="absolute bottom-2 right-3 text-xs text-gray-400">
+                    {post.title.length}/200
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Textarea */}
+              <div className="space-y-3">
+                <label htmlFor="content" className="flex items-center gap-2 text-sm lg:text-base font-semibold text-gray-800">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Post Content *
+                </label>
+                <div className="relative">
+                  <textarea
+                    id="content"
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 lg:py-4 text-base lg:text-lg bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 resize-vertical min-h-[200px] lg:min-h-[300px] disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Share your thoughts, ideas, and insights here..."
+                    value={post.content}
+                    onChange={(e) => setPost({ ...post, content: e.target.value })}
+                    required
+                    disabled={saving}
+                    rows={12}
+                  />
+                  <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white/80 rounded px-2 py-1">
+                    {post.content.length} characters
+                  </div>
+                </div>
+              </div>
+
+              {/* Tags Input */}
+              <div className="space-y-3">
+                <label htmlFor="tags" className="flex items-center gap-2 text-sm lg:text-base font-semibold text-gray-800">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  Tags <span className="text-gray-500 font-normal">(optional)</span>
+                </label>
+                <div className="space-y-2">
+                  <input
+                    id="tags"
+                    type="text"
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 lg:py-4 text-base lg:text-lg bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="technology, programming, webdev, react..."
+                    value={post.tags}
+                    onChange={(e) => setPost({ ...post, tags: e.target.value })}
+                    disabled={saving}
+                  />
+                  <div className="flex items-center gap-2 text-xs lg:text-sm text-gray-500">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Save Changes
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+                    Separate tags with commas. Tags help others discover your content.
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/posts/${id}`)}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-3 lg:py-4 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                  disabled={saving}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="text-sm lg:text-base">Cancel</span>
+                </button>
+                
+                <button
+                  type="submit"
+                  className="flex-1 sm:flex-auto inline-flex items-center justify-center gap-2 px-6 lg:px-8 py-3 lg:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                  disabled={saving || !post.title.trim() || !post.content.trim()}
+                >
+                  {saving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm lg:text-base">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-sm lg:text-base">Update Post</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Tips Section */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 lg:p-6">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-blue-900 text-sm lg:text-base">Writing Tips</h4>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Use a clear, descriptive title that captures your main idea</li>
+                      <li>• Structure your content with paragraphs for better readability</li>
+                      <li>• Add relevant tags to help others discover your post</li>
+                      {!isAdmin() && <li>• Your changes will need admin approval before being published</li>}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
