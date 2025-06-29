@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-const VITE_API_URL = import.meta.env.VITE_API_URL|| "https://mindthread-1.onrender.com";
+const VITE_API_URL = import.meta.env.VITE_API_URL || "https://mindthread-1.onrender.com";
 
 const EditPost = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [post, setPost] = useState({ title: "", content: "" });
+  const [post, setPost] = useState({ title: "", content: "", tags: "" });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -46,7 +47,11 @@ const EditPost = () => {
         }
 
         const data = await res.json();
-        setPost({ title: data.title, content: data.content });
+        setPost({
+          title: data.title || "",
+          content: data.content || "",
+          tags: data.tags || "",
+        });
       } catch (err) {
         toast.error("Could not load the post.");
       }
@@ -65,10 +70,16 @@ const EditPost = () => {
       return;
     }
 
-    if (!post.title.trim() || !post.content.trim()) {
+    const trimmedTitle = post.title.trim();
+    const trimmedContent = post.content.trim();
+    const trimmedTags = post.tags.trim();
+
+    if (!trimmedTitle || !trimmedContent) {
       toast.error("Title and content cannot be empty.");
       return;
     }
+
+    setLoading(true);
 
     try {
       const res = await fetch(`${VITE_API_URL}/api/posts/${id}`, {
@@ -77,19 +88,25 @@ const EditPost = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(post),
+        body: JSON.stringify({
+          title: trimmedTitle,
+          content: trimmedContent,
+          tags: trimmedTags || null,
+        }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        const data = await res.json();
         toast.success(data.message || "Post updated successfully.");
         navigate(`/posts/${id}`);
       } else {
-        const error = await res.json();
-        toast.error(error.message || "Failed to update post.");
+        toast.error(data.message || "Failed to update post.");
       }
     } catch (err) {
       toast.error("Something went wrong while updating.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,12 +129,20 @@ const EditPost = () => {
           onChange={(e) => setPost({ ...post, content: e.target.value })}
           required
         />
+        <input
+          type="text"
+          className="w-full border p-2 rounded"
+          placeholder="Tags (comma-separated)"
+          value={post.tags}
+          onChange={(e) => setPost({ ...post, tags: e.target.value })}
+        />
         <div className="flex justify-between">
           <button
             type="submit"
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            disabled={loading}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
           >
-            Save Changes
+            {loading ? "Saving..." : "Save Changes"}
           </button>
           <button
             type="button"
